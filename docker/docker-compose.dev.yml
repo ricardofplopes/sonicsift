@@ -1,0 +1,13 @@
+services:
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    volumes:
+      - ../backend:/app/backend
+      - sonicsift-work:/app/work
+    stdin_open: true
+    tty: true
+
+volumes:
+  sonicsift-work:
