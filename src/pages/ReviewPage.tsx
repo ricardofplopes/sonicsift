@@ -27,7 +27,7 @@ export default function ReviewPage() {
   };
 
   return (
-    <div className="flex flex-col h-full p-8 overflow-y-auto gap-6">
+    <div className="flex flex-col h-full p-8 overflow-y-auto gap-6 animate-fade-in">
       <h2 className="text-2xl font-bold text-gray-100">Review Segments</h2>
       <p className="text-gray-400">
         Click segments in the timeline to toggle keep / discard. Green = kept,

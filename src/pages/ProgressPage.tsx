@@ -24,7 +24,7 @@ export default function ProgressPage() {
   };
 
   return (
-    <div className="flex flex-col h-full p-8 gap-6">
+    <div className="flex flex-col h-full p-8 gap-6 animate-fade-in">
       <h2 className="text-2xl font-bold text-gray-100">Processing</h2>
 
       {/* Phase label */}

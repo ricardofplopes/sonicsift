@@ -3,10 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useJobStore } from "@/stores/jobStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useSidecar } from "@/hooks/useSidecar";
+import { save } from "@tauri-apps/plugin-dialog";
 import ProgressBar from "@/components/ProgressBar";
-
-// TODO: Wire to actual Tauri dialog once Rust backend is built
-// import { save } from "@tauri-apps/plugin-dialog";
 
 export default function ExportPage() {
   const navigate = useNavigate();
@@ -18,15 +16,17 @@ export default function ExportPage() {
   );
 
   const handleChooseOutput = async () => {
-    // TODO: Wire to actual Tauri save dialog once Rust backend is built
-    // const selected = await save({
-    //   defaultPath: `processed_output.${settings.outputFormat}`,
-    //   filters: [{ name: "Audio", extensions: [settings.outputFormat] }],
-    // });
-    // if (selected) setOutputPath(selected);
-
-    // Mock path for development
-    setOutputPath(`C:\\Users\\demo\\Music\\processed_output.${settings.outputFormat}`);
+    try {
+      const selected = await save({
+        defaultPath: "processed_output.wav",
+        filters: [
+          { name: "Audio", extensions: ["wav", "mp3", "flac"] },
+        ],
+      });
+      if (selected) setOutputPath(selected);
+    } catch (err) {
+      console.error("[ExportPage] Save dialog error:", err);
+    }
   };
 
   const handleExport = async () => {
@@ -38,14 +38,19 @@ export default function ExportPage() {
       .filter((s) => s.keep)
       .map((s) => ({ start: s.start, end: s.end }));
 
-    // TODO: Wire to actual sidecar once Rust backend is built
-    await sendCommand("export", {
-      inputPath: audioFile.path,
-      outputPath,
-      segments: keptSegments,
-      format: settings.outputFormat,
-      enhancementStrength: settings.enhancementStrength,
-    });
+    try {
+      await sendCommand("export", {
+        inputPath: audioFile.path,
+        outputPath,
+        segments: keptSegments,
+        format: settings.outputFormat,
+        enhancementStrength: settings.enhancementStrength,
+      });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Export failed unexpectedly";
+      useJobStore.getState().setError(message);
+    }
   };
 
   const handleStartOver = () => {
@@ -57,7 +62,7 @@ export default function ExportPage() {
   const isComplete = job.status === "complete";
 
   return (
-    <div className="flex flex-col items-center justify-center h-full p-8 gap-6">
+    <div className="flex flex-col items-center justify-center h-full p-8 gap-6 animate-fade-in">
       <h2 className="text-2xl font-bold text-gray-100">Export</h2>
 
       {/* Output path */}

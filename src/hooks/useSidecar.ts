@@ -1,12 +1,19 @@
 import { useCallback, useRef, useState } from "react";
 import { useJobStore } from "@/stores/jobStore";
+import { Command } from "@tauri-apps/plugin-shell";
 import type { Segment, SidecarMessage } from "@/types";
 
-// TODO: Wire to actual sidecar once Rust backend is built
-// When the sidecar is available, uncomment the Tauri imports and remove mock mode.
-// import { Command } from "@tauri-apps/plugin-shell";
-
+/**
+ * Set to `false` once the Python sidecar binary is bundled at
+ * `src-tauri/binaries/sonicsift-worker-<target-triple>[.exe]`.
+ */
 const MOCK_MODE = true;
+
+interface ChildProcess {
+  write(data: string): Promise<void>;
+  kill(): Promise<void>;
+  pid: number;
+}
 
 /**
  * Custom hook to communicate with the Python sidecar via JSON-over-stdio.
@@ -16,33 +23,69 @@ const MOCK_MODE = true;
  */
 export function useSidecar() {
   const [isReady, setIsReady] = useState(false);
-  const childRef = useRef<unknown>(null);
-  const store = useJobStore;
+  const [mockFallback, setMockFallback] = useState(false);
+  const childRef = useRef<ChildProcess | null>(null);
+  const isMocked = MOCK_MODE || mockFallback;
 
   const handleMessage = useCallback((msg: SidecarMessage) => {
-    const state = store.getState();
+    const state = useJobStore.getState();
+    const { payload } = msg;
+
     switch (msg.type) {
-      case "progress":
-        state.updateProgress(
-          msg.payload.progress as number,
-          msg.payload.phase as string | undefined,
-        );
+      case "progress": {
+        const progress =
+          typeof payload.progress === "number" ? payload.progress : undefined;
+        if (progress === undefined) {
+          console.warn("[sidecar] Invalid progress payload:", payload);
+          break;
+        }
+        const phase =
+          typeof payload.phase === "string" ? payload.phase : undefined;
+        state.updateProgress(progress, phase);
         break;
-      case "log":
-        state.addLog(
-          msg.payload.level as "info" | "warn" | "error",
-          msg.payload.message as string,
-        );
+      }
+      case "log": {
+        const level = payload.level;
+        const message =
+          typeof payload.message === "string" ? payload.message : undefined;
+        if (
+          (level !== "info" && level !== "warn" && level !== "error") ||
+          message === undefined
+        ) {
+          console.warn("[sidecar] Invalid log payload:", payload);
+          break;
+        }
+        state.addLog(level, message);
         break;
-      case "segments":
-        state.setSegments(msg.payload.segments as Segment[]);
+      }
+      case "segments": {
+        if (!Array.isArray(payload.segments)) {
+          console.warn("[sidecar] Invalid segments payload:", payload);
+          break;
+        }
+        state.setSegments(payload.segments as Segment[]);
         break;
-      case "complete":
-        state.setComplete(msg.payload.outputPath as string);
+      }
+      case "complete": {
+        const outputPath =
+          typeof payload.outputPath === "string"
+            ? payload.outputPath
+            : undefined;
+        if (outputPath === undefined) {
+          console.warn("[sidecar] Invalid complete payload:", payload);
+          break;
+        }
+        state.setComplete(outputPath);
         break;
-      case "error":
-        state.setError(msg.payload.message as string);
+      }
+      case "error": {
+        const errorMessage =
+          typeof payload.message === "string"
+            ? payload.message
+            : "Unknown error";
+        state.setError(errorMessage);
         break;
+      }
       default:
         console.warn("[sidecar] Unknown message type:", msg.type);
     }
@@ -57,68 +100,78 @@ export function useSidecar() {
       return;
     }
 
-    // TODO: Wire to actual sidecar once Rust backend is built
-    // const command = Command.sidecar("binaries/sonicsift-worker");
-    // command.stdout.on("data", (line: string) => {
-    //   try {
-    //     const msg: SidecarMessage = JSON.parse(line);
-    //     handleMessage(msg);
-    //   } catch {
-    //     console.warn("[sidecar] Non-JSON stdout:", line);
-    //   }
-    // });
-    // command.stderr.on("data", (line: string) => {
-    //   console.error("[sidecar stderr]", line);
-    //   store.getState().addLog("warn", `[stderr] ${line}`);
-    // });
-    // command.on("close", (data: { code: number }) => {
-    //   console.log("[sidecar] Exited with code:", data.code);
-    //   childRef.current = null;
-    //   setIsReady(false);
-    // });
-    // childRef.current = await command.spawn();
-    // setIsReady(true);
+    try {
+      const command = Command.sidecar("binaries/sonicsift-worker");
+
+      command.stdout.on("data", (line: string) => {
+        try {
+          const msg: SidecarMessage = JSON.parse(line);
+          handleMessage(msg);
+        } catch {
+          console.warn("[sidecar] Non-JSON stdout:", line);
+        }
+      });
+
+      command.stderr.on("data", (line: string) => {
+        console.error("[sidecar stderr]", line);
+        useJobStore.getState().addLog("warn", `[stderr] ${line}`);
+      });
+
+      command.on("close", (data) => {
+        console.log("[sidecar] Exited with code:", data.code);
+        childRef.current = null;
+        setIsReady(false);
+      });
+
+      const child = await command.spawn();
+      childRef.current = child as unknown as ChildProcess;
+      setIsReady(true);
+    } catch (err) {
+      console.error("[sidecar] Failed to spawn, falling back to mock mode:", err);
+      setMockFallback(true);
+      setIsReady(true);
+    }
   }, [handleMessage]);
 
   const sendCommand = useCallback(
     async (type: string, payload: Record<string, unknown> = {}) => {
-      if (!childRef.current && !MOCK_MODE) {
+      if (!childRef.current && !isMocked) {
         await spawnSidecar();
       }
-      if (!isReady && !MOCK_MODE) {
+      if (!isReady && !isMocked) {
         await spawnSidecar();
       }
 
       const message = JSON.stringify({ type, payload }) + "\n";
 
-      if (MOCK_MODE) {
+      if (isMocked) {
         console.log("[sidecar mock] Sending:", message.trim());
         simulateMockResponse(type, payload, handleMessage);
         return;
       }
 
-      // TODO: Wire to actual sidecar once Rust backend is built
-      // await (childRef.current as { write(data: string): Promise<void> }).write(message);
+      if (childRef.current) {
+        await childRef.current.write(message);
+      }
     },
-    [isReady, spawnSidecar, handleMessage],
+    [isReady, isMocked, spawnSidecar, handleMessage],
   );
 
   const killSidecar = useCallback(async () => {
-    if (MOCK_MODE) {
+    if (isMocked) {
       console.log("[sidecar mock] Kill requested");
       setIsReady(false);
       return;
     }
 
-    // TODO: Wire to actual sidecar once Rust backend is built
-    // if (childRef.current) {
-    //   await (childRef.current as { kill(): Promise<void> }).kill();
-    //   childRef.current = null;
-    //   setIsReady(false);
-    // }
-  }, []);
+    if (childRef.current) {
+      await childRef.current.kill();
+      childRef.current = null;
+      setIsReady(false);
+    }
+  }, [isMocked]);
 
-  return { sendCommand, killSidecar, isReady: MOCK_MODE || isReady };
+  return { sendCommand, killSidecar, isReady: isMocked || isReady };
 }
 
 // ---------------------------------------------------------------------------

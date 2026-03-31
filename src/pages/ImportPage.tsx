@@ -1,36 +1,53 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useJobStore } from "@/stores/jobStore";
+import Logo from "@/components/Logo";
+import { open } from "@tauri-apps/plugin-dialog";
 import type { AudioFile } from "@/types";
 
-// TODO: Wire to actual Tauri dialog once Rust backend is built
-// import { open } from "@tauri-apps/plugin-dialog";
+function extractFileName(filePath: string): string {
+  const parts = filePath.replace(/\\/g, "/").split("/");
+  return parts[parts.length - 1] || filePath;
+}
 
 export default function ImportPage() {
   const navigate = useNavigate();
   const { audioFile, setAudioFile } = useJobStore();
   const [isDragging, setIsDragging] = useState(false);
+  const [dropMessage, setDropMessage] = useState<string | null>(null);
 
   const handleChooseFile = useCallback(async () => {
-    // TODO: Wire to actual Tauri dialog once Rust backend is built
-    // const selected = await open({
-    //   filters: [{ name: "Audio", extensions: ["wav", "mp3", "flac", "ogg", "m4a", "aac"] }],
-    //   multiple: false,
-    // });
-    // if (!selected) return;
-    // const filePath = selected as string;
+    try {
+      const selected = await open({
+        multiple: false,
+        filters: [
+          {
+            name: "Audio",
+            extensions: ["wav", "mp3", "flac", "ogg", "aac", "m4a", "wma"],
+          },
+        ],
+      });
+      if (!selected) return;
 
-    // Mock file for development
-    const mockFile: AudioFile = {
-      path: "C:\\Users\\demo\\Music\\podcast_episode_42.wav",
-      name: "podcast_episode_42.wav",
-      size: 256_000_000,
-      duration: 3720,
-      sampleRate: 44100,
-      channels: 2,
-      codec: "PCM 16-bit",
-    };
-    setAudioFile(mockFile);
+      const filePath = selected as string;
+      const fileName = extractFileName(filePath);
+
+      // Real metadata (duration, sample rate, etc.) will come from
+      // the Python sidecar later; use placeholders for now.
+      const file: AudioFile = {
+        path: filePath,
+        name: fileName,
+        size: 0,
+        duration: 0,
+        sampleRate: 0,
+        channels: 0,
+        codec: "unknown",
+      };
+      setAudioFile(file);
+      setDropMessage(null);
+    } catch (err) {
+      console.error("[ImportPage] File dialog error:", err);
+    }
   }, [setAudioFile]);
 
   const handleDrop = useCallback(
@@ -38,19 +55,23 @@ export default function ImportPage() {
       e.preventDefault();
       setIsDragging(false);
 
-      // TODO: Wire to actual file drop handling
-      // In Tauri, drag-and-drop gives us file paths — parse them here
-      console.log("Dropped files:", e.dataTransfer.files);
-
-      // Mock for dev
-      handleChooseFile();
+      // In Tauri, OS drag-drop delivers file paths through Tauri's
+      // drag-drop event system, not the browser DragEvent.
+      // Metadata extraction requires the Python sidecar.
+      setDropMessage(
+        "Drag & drop from the OS is detected, but metadata extraction " +
+          "requires the sidecar. Please use the file picker instead.",
+      );
     },
-    [handleChooseFile],
+    [],
   );
 
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-6 p-8">
-      <h2 className="text-2xl font-bold text-gray-100">Import Audio File</h2>
+    <div className="flex flex-col items-center justify-center h-full gap-6 p-8 animate-fade-in">
+      <Logo size="lg" />
+      <p className="text-sm text-gray-500 -mt-4 tracking-widest uppercase">
+        Process · Clean · Export
+      </p>
       <p className="text-gray-400 text-center max-w-md">
         Drop a large audio file (podcast, lecture, interview) to get started.
         SonicSift will detect silence and let you review before exporting.
@@ -65,31 +86,75 @@ export default function ImportPage() {
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
         className={`
-          w-full max-w-lg h-56 rounded-xl border-2 border-dashed
-          flex flex-col items-center justify-center gap-3 transition-colors cursor-pointer
+          relative w-full max-w-lg h-56 rounded-xl border-2 border-dashed overflow-hidden
+          flex flex-col items-center justify-center gap-3 cursor-pointer
+          transition-all duration-300
           ${
             isDragging
-              ? "border-sonic-400 bg-sonic-600/10"
+              ? "border-sonic-400 bg-sonic-600/10 animate-pulse-border scale-[1.01]"
               : "border-gray-600 hover:border-gray-500 bg-gray-800/50"
           }
         `}
         onClick={handleChooseFile}
       >
-        <span className="text-5xl">📂</span>
-        <span className="text-gray-300 font-medium">
-          Drag & drop audio file here
-        </span>
-        <span className="text-gray-500 text-sm">
-          or click to browse
-        </span>
-        <span className="text-gray-600 text-xs">
-          WAV · MP3 · FLAC · OGG · M4A · AAC
-        </span>
+        {/* Waveform background decoration */}
+        <svg
+          className="absolute inset-0 w-full h-full opacity-[0.04] pointer-events-none"
+          viewBox="0 0 400 200"
+          preserveAspectRatio="none"
+        >
+          {Array.from({ length: 60 }, (_, i) => {
+            const h = 30 + Math.sin(i * 0.7) * 25 + Math.sin(i * 1.3) * 15;
+            return (
+              <rect
+                key={i}
+                x={i * 6.7}
+                y={100 - h / 2}
+                width={4}
+                height={h}
+                rx={2}
+                fill="currentColor"
+              />
+            );
+          })}
+        </svg>
+
+        <div className="relative z-10 flex flex-col items-center gap-3">
+          <div className="w-16 h-16 rounded-full bg-gray-700/50 flex items-center justify-center text-3xl">
+            🎵
+          </div>
+          <span className="text-gray-200 font-semibold text-lg">
+            Drop your audio file here
+          </span>
+          <span className="text-gray-500 text-sm">
+            or click anywhere to browse
+          </span>
+        </div>
       </div>
+
+      {/* Supported formats */}
+      <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-gray-500">
+        <span>Supported formats:</span>
+        {["WAV", "MP3", "FLAC", "OGG", "M4A", "AAC"].map((fmt) => (
+          <span
+            key={fmt}
+            className="px-2 py-0.5 bg-gray-800 rounded text-gray-400 font-mono"
+          >
+            .{fmt.toLowerCase()}
+          </span>
+        ))}
+      </div>
+
+      {/* Drag-drop notice */}
+      {dropMessage && (
+        <p className="text-yellow-400 text-sm max-w-lg text-center">
+          {dropMessage}
+        </p>
+      )}
 
       {/* File info */}
       {audioFile && (
-        <div className="card w-full max-w-lg">
+        <div className="card w-full max-w-lg animate-slide-in">
           <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
             Selected File
           </h3>
@@ -111,6 +176,7 @@ export default function ImportPage() {
         className="btn-primary px-8 py-3 text-lg"
       >
         Continue →
+        <span className="text-xs opacity-60 ml-2">(Ctrl+Enter)</span>
       </button>
     </div>
   );

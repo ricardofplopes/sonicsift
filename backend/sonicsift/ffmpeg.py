@@ -92,6 +92,12 @@ def detect_silence(
         "-",
     ]
     result = subprocess.run(args, capture_output=True, text=True)
+    if result.returncode != 0:
+        log.error("FFmpeg stderr:\n%s", result.stderr)
+        raise RuntimeError(
+            f"FFmpeg silencedetect failed (rc={result.returncode}): {' '.join(args)}\n"
+            f"{result.stderr}"
+        )
     # silencedetect writes to stderr regardless of exit code
     output = result.stderr
 
@@ -110,6 +116,13 @@ def detect_silence(
         if m_end:
             ends.append(float(m_end.group(1)))
             durations.append(float(m_end.group(2)))
+
+    if len(starts) != len(ends) or len(starts) != len(durations):
+        log.warning(
+            "Silence boundary mismatch: starts=%d, ends=%d, durations=%d – "
+            "detection may be unreliable",
+            len(starts), len(ends), len(durations),
+        )
 
     segments: list[dict] = []
     for i, start in enumerate(starts):

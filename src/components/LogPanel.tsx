@@ -29,7 +29,7 @@ export default function LogPanel({ logs }: LogPanelProps) {
       <div className="px-3 py-2 border-b border-gray-700 text-xs text-gray-500 font-medium uppercase tracking-wider">
         Logs
       </div>
-      <div className="flex-1 overflow-y-auto p-2 space-y-0.5 font-mono text-xs">
+      <div className="flex-1 overflow-y-auto p-2 space-y-0.5 font-mono text-xs leading-relaxed">
         {logs.length === 0 && (
           <p className="text-gray-600 p-2">No log entries yet.</p>
         )}

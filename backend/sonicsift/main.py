@@ -7,7 +7,6 @@ import logging
 import os
 import sys
 import threading
-import traceback
 from typing import Any
 
 from sonicsift.assembly import assemble_segments
@@ -108,7 +107,11 @@ def _handle_analyze(payload: dict[str, Any]) -> None:
 
     # 3. Detection
     _send_progress(job_id, "detection", 0)
-    segments = detect_segments(file_path, config)
+    try:
+        segments = detect_segments(file_path, config)
+    except Exception as exc:
+        _send_error(job_id, f"Detection failed: {exc}")
+        return
     _send_progress(job_id, "detection", 100)
 
     _send({
@@ -134,10 +137,17 @@ def _handle_analyze(payload: dict[str, Any]) -> None:
 def _handle_export(payload: dict[str, Any]) -> None:
     """Enhance → assemble → export the final cleaned audio."""
     job_id: str = payload.get("jobId", "")
-    file_path: str = payload["filePath"]
-    output_path: str = payload["outputPath"]
+    file_path: str | None = payload.get("filePath")
+    output_path: str | None = payload.get("outputPath")
+    if not file_path or not output_path:
+        _send_error(job_id, "Missing required field: filePath or outputPath")
+        return
     segment_defs: list[dict] = payload.get("segments", [])
     config = ProcessingConfig(**payload.get("config", {}))
+
+    if not segment_defs:
+        _send_error(job_id, "No segments provided for export")
+        return
 
     _cancel_event.clear()
     work_dir = config.work_dir
@@ -145,44 +155,53 @@ def _handle_export(payload: dict[str, Any]) -> None:
 
     pipeline = get_pipeline()
     enhanced_paths: list[dict] = []
+    intermediate_files: list[str] = []
 
-    # 1. Enhance each kept segment
-    total = len(segment_defs)
-    for i, seg in enumerate(segment_defs):
+    try:
+        # 1. Enhance each kept segment
+        total = len(segment_defs)
+        for i, seg in enumerate(segment_defs):
+            if _cancelled():
+                return
+            _send_progress(job_id, "enhance", (i / total) * 100 if total else 0)
+
+            seg_input = os.path.join(work_dir, f"seg_{i:04d}_raw.wav")
+            seg_output = os.path.join(work_dir, f"seg_{i:04d}_enh.wav")
+            intermediate_files.extend([seg_input, seg_output])
+
+            from sonicsift.ffmpeg import extract_segment
+            extract_segment(file_path, seg_input, seg["start"], seg["end"])
+            pipeline.process(seg_input, seg_output, config.enhancement_strength)
+            enhanced_paths.append({"path": seg_output})
+
+        _send_progress(job_id, "enhance", 100)
+
         if _cancelled():
             return
-        _send_progress(job_id, "enhance", (i / total) * 100 if total else 0)
 
-        seg_input = os.path.join(work_dir, f"seg_{i:04d}_raw.wav")
-        seg_output = os.path.join(work_dir, f"seg_{i:04d}_enh.wav")
+        # 2. Assemble
+        _send_progress(job_id, "assembly", 0)
+        assembled = assemble_segments(enhanced_paths, work_dir, crossfade_ms=config.crossfade_ms)
+        _send_progress(job_id, "assembly", 100)
 
-        from sonicsift.ffmpeg import extract_segment
-        extract_segment(file_path, seg_input, seg["start"], seg["end"])
-        pipeline.process(seg_input, seg_output, config.enhancement_strength)
-        enhanced_paths.append({"path": seg_output})
+        if _cancelled():
+            return
 
-    _send_progress(job_id, "enhance", 100)
+        # 3. Export
+        _send_progress(job_id, "export", 0)
+        final = export_final(assembled, output_path, fmt=config.output_format)
+        _send_progress(job_id, "export", 100)
 
-    if _cancelled():
-        return
-
-    # 2. Assemble
-    _send_progress(job_id, "assembly", 0)
-    assembled = assemble_segments(enhanced_paths, work_dir, crossfade_ms=config.crossfade_ms)
-    _send_progress(job_id, "assembly", 100)
-
-    if _cancelled():
-        return
-
-    # 3. Export
-    _send_progress(job_id, "export", 0)
-    final = export_final(assembled, output_path, fmt=config.output_format)
-    _send_progress(job_id, "export", 100)
-
-    _send({
-        "type": "exportResult",
-        "payload": {"jobId": job_id, "outputPath": final},
-    })
+        _send({
+            "type": "exportResult",
+            "payload": {"jobId": job_id, "outputPath": final},
+        })
+    finally:
+        for f in intermediate_files:
+            try:
+                os.remove(f)
+            except OSError:
+                pass
 
 
 # ---------------------------------------------------------------------------
@@ -222,10 +241,12 @@ def main() -> None:
 
         try:
             handler(payload)
-        except Exception:
-            tb = traceback.format_exc()
+        except Exception as exc:
             log.exception("Unhandled error for command %r", cmd)
-            _send_error(payload.get("jobId"), tb)
+            _send_error(
+                payload.get("jobId"),
+                f"{type(exc).__name__}: {exc}",
+            )
 
 
 if __name__ == "__main__":

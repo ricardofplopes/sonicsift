@@ -1,13 +1,47 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useJobStore } from "@/stores/jobStore";
 import { useSidecar } from "@/hooks/useSidecar";
+
+/** Clamp a number to [min, max]. */
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+interface ValidationErrors {
+  minSilenceDuration?: string;
+  keptPaddingMs?: string;
+}
 
 export default function SettingsPage() {
   const navigate = useNavigate();
   const { settings, updateSetting, resetDefaults } = useSettingsStore();
   const { audioFile, startAnalysis } = useJobStore();
   const { sendCommand } = useSidecar();
+  const [errors, setErrors] = useState<ValidationErrors>({});
+
+  const validateAndUpdate = (
+    key: "minSilenceDuration" | "keptPaddingMs",
+    raw: number,
+    min: number,
+    max: number,
+  ) => {
+    if (Number.isNaN(raw)) return;
+
+    const clamped = clamp(raw, min, max);
+    updateSetting(key, clamped);
+
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (raw !== clamped) {
+        next[key] = `Value clamped to ${clamped} (must be ${min}–${max})`;
+      } else {
+        delete next[key];
+      }
+      return next;
+    });
+  };
 
   const handleStartAnalysis = async () => {
     if (!audioFile) return;
@@ -15,7 +49,6 @@ export default function SettingsPage() {
     startAnalysis();
     navigate("/progress");
 
-    // TODO: Wire to actual sidecar once Rust backend is built
     await sendCommand("analyze", {
       inputPath: audioFile.path,
       duration: audioFile.duration,
@@ -24,7 +57,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex flex-col h-full p-8 overflow-y-auto">
+    <div className="flex flex-col h-full p-8 overflow-y-auto animate-fade-in">
       <h2 className="text-2xl font-bold text-gray-100 mb-2">
         Processing Settings
       </h2>
@@ -73,10 +106,13 @@ export default function SettingsPage() {
             step={0.1}
             value={settings.minSilenceDuration}
             onChange={(e) =>
-              updateSetting("minSilenceDuration", Number(e.target.value))
+              validateAndUpdate("minSilenceDuration", Number(e.target.value), 0.1, 10)
             }
             className="input-field w-40"
           />
+          {errors.minSilenceDuration && (
+            <p className="text-xs text-amber-400 mt-1">{errors.minSilenceDuration}</p>
+          )}
           <p className="text-xs text-gray-500 mt-1">
             Gaps shorter than this are kept as speech.
           </p>
@@ -97,10 +133,13 @@ export default function SettingsPage() {
             step={10}
             value={settings.keptPaddingMs}
             onChange={(e) =>
-              updateSetting("keptPaddingMs", Number(e.target.value))
+              validateAndUpdate("keptPaddingMs", Number(e.target.value), 0, 2000)
             }
             className="input-field w-40"
           />
+          {errors.keptPaddingMs && (
+            <p className="text-xs text-amber-400 mt-1">{errors.keptPaddingMs}</p>
+          )}
           <p className="text-xs text-gray-500 mt-1">
             Silence padding kept around speech segments for natural transitions.
           </p>
@@ -164,6 +203,7 @@ export default function SettingsPage() {
           className="btn-primary px-6"
         >
           Start Analysis ▶
+          <span className="text-xs opacity-60 ml-2">(Ctrl+Enter)</span>
         </button>
       </div>
     </div>

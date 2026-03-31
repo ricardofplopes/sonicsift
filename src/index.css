@@ -31,6 +31,36 @@
   }
 }
 
+/* Page transition */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Pulse for active processing */
+@keyframes pulse-sonic {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Slide in from right for new segments */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Shimmer sweep for progress bar */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Pulsing border for drag zone */
+@keyframes pulse-border {
+  0%, 100% { border-color: #6690ff; }
+  50% { border-color: #1a46ff; }
+}
+
 @layer components {
   .btn-primary {
     @apply px-4 py-2 bg-sonic-600 hover:bg-sonic-500 text-white font-medium rounded-lg
@@ -54,5 +84,45 @@
   .input-field {
     @apply bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-100
            focus:outline-none focus:border-sonic-500 focus:ring-1 focus:ring-sonic-500;
+  }
+
+  /* Progress bar shimmer overlay */
+  .progress-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .progress-shimmer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.15) 50%,
+      transparent 100%
+    );
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-pulse-sonic {
+    animation: pulse-sonic 2s ease-in-out infinite;
+  }
+
+  .animate-slide-in {
+    animation: slideIn 0.2s ease-out;
+  }
+
+  .animate-pulse-border {
+    animation: pulse-border 1.5s ease-in-out infinite;
   }
 }
