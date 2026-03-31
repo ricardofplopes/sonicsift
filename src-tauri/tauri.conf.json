@@ -31,16 +31,5 @@
       "icons/icon.ico"
     ]
   },
-  "plugins": {
-    "shell": {
-      "scope": [
-        {
-          "name": "sonicsift-worker",
-          "cmd": "binaries/sonicsift-worker",
-          "sidecar": true,
-          "args": true
-        }
-      ]
-    }
-  }
+  "plugins": {}
 }
