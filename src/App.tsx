@@ -61,7 +61,7 @@ export default function App() {
         className="h-10 shrink-0 flex items-center px-4 gap-3 bg-gray-900/80 backdrop-blur-sm border-b border-gray-800 z-50"
         data-tauri-drag-region
       >
-        <Logo size="sm" />
+        <Logo size="sm" showText={false} />
         <div className="w-px h-4 bg-gray-700" />
         <span className="text-xs text-gray-400">
           {currentStep?.label ?? "SonicSift"}

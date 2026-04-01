@@ -93,90 +93,88 @@ export default function Sidebar() {
         <p className="text-xs text-gray-500 mt-1">Audio Processor</p>
       </div>
 
-      <nav className="flex-1 flex flex-col gap-1 px-3">
-        {steps.map((step, index) => {
-          const isCurrent = step.path === location.pathname;
-          const isAccessible = step.canNavigate();
-          const isPast = index < currentIndex;
+      <nav className="flex-1 px-3">
+        <div className="relative">
+          {/* Continuous vertical line behind all steps */}
+          <div className="absolute left-[23px] top-[22px] bottom-[22px] w-px bg-gray-700/40" />
+          {/* Colored progress line overlay */}
+          {currentIndex > 0 && (
+            <div
+              className="absolute left-[23px] top-[22px] w-px bg-sonic-600/70 transition-all duration-500"
+              style={{
+                height: `calc(${((currentIndex) / (steps.length - 1)) * 100}% - 44px * ${1 - (currentIndex) / (steps.length - 1)})`,
+              }}
+            />
+          )}
 
-          return (
-            <div key={step.path} className="relative flex items-center">
-              {/* Connecting line */}
-              {index > 0 && (
-                <div
-                  className={`absolute left-[15px] -top-1 h-1 w-0.5 transition-colors duration-300 ${
-                    isPast || isCurrent ? "bg-sonic-600" : "bg-gray-700/50"
-                  }`}
-                />
-              )}
-              {index < steps.length - 1 && (
-                <div
-                  className={`absolute left-[15px] -bottom-1 h-1 w-0.5 transition-colors duration-300 ${
-                    isPast ? "bg-sonic-600" : "bg-gray-700/50"
-                  }`}
-                />
-              )}
+          <div className="relative flex flex-col gap-1">
+            {steps.map((step, index) => {
+              const isCurrent = step.path === location.pathname;
+              const isAccessible = step.canNavigate();
+              const isPast = index < currentIndex;
 
-              {/* Step button — circle + icon + label in one row */}
-              <button
-                onClick={() => isAccessible && navigate(step.path)}
-                disabled={!isAccessible}
-                className={`
-                  relative z-10 w-full flex items-center gap-3 px-2 py-2 rounded-lg text-left text-sm font-medium
-                  transition-all duration-200
-                  ${
-                    isCurrent
-                      ? "bg-sonic-600/15 text-sonic-300"
-                      : isPast && isAccessible
-                        ? "text-gray-300 hover:bg-gray-800/70"
-                        : isAccessible
-                          ? "text-gray-400 hover:bg-gray-800/70 hover:text-gray-200"
-                          : "text-gray-600 cursor-not-allowed opacity-40"
-                  }
-                `}
-              >
-                {/* Number circle */}
-                <div
+              return (
+                <button
+                  key={step.path}
+                  onClick={() => isAccessible && navigate(step.path)}
+                  disabled={!isAccessible}
                   className={`
-                    w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0
-                    transition-all duration-300
+                    relative w-full flex items-center gap-3 px-2 py-2 rounded-lg text-left text-sm font-medium
+                    transition-all duration-200
                     ${
                       isCurrent
-                        ? "bg-sonic-600 text-white shadow-[0_0_10px_rgba(61,107,255,0.4)]"
-                        : isPast
-                          ? "bg-sonic-700/80 text-sonic-200"
+                        ? "bg-sonic-600/15 text-sonic-300"
+                        : isPast && isAccessible
+                          ? "text-gray-300 hover:bg-gray-800/70"
                           : isAccessible
-                            ? "bg-gray-700/80 text-gray-400"
-                            : "bg-gray-800/40 text-gray-700"
+                            ? "text-gray-400 hover:bg-gray-800/70 hover:text-gray-200"
+                            : "text-gray-600 cursor-not-allowed opacity-40"
                     }
                   `}
                 >
-                  {isPast ? (
-                    <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3 8.5l3.5 3.5L13 5" />
-                    </svg>
-                  ) : (
-                    index + 1
+                  {/* Number circle */}
+                  <div
+                    className={`
+                      w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0
+                      transition-all duration-300
+                      ${
+                        isCurrent
+                          ? "bg-sonic-600 text-white shadow-[0_0_10px_rgba(61,107,255,0.4)]"
+                          : isPast
+                            ? "bg-sonic-700/80 text-sonic-200"
+                            : isAccessible
+                              ? "bg-gray-700/80 text-gray-400"
+                              : "bg-gray-800/40 text-gray-700"
+                      }
+                    `}
+                  >
+                    {isPast ? (
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 8.5l3.5 3.5L13 5" />
+                      </svg>
+                    ) : (
+                      index + 1
+                    )}
+                  </div>
+
+                  {/* Icon */}
+                  {StepIcons[step.iconKey](
+                    `w-4 h-4 shrink-0 ${
+                      isCurrent
+                        ? "text-sonic-400"
+                        : isPast
+                          ? "text-gray-400"
+                          : "text-gray-500"
+                    }`
                   )}
-                </div>
 
-                {/* Icon */}
-                {StepIcons[step.iconKey](
-                  `w-4 h-4 shrink-0 ${
-                    isCurrent
-                      ? "text-sonic-400"
-                      : isPast
-                        ? "text-gray-400"
-                        : "text-gray-500"
-                  }`
-                )}
-
-                {/* Label */}
-                <span>{step.label}</span>
-              </button>
-            </div>
-          );
-        })}
+                  {/* Label */}
+                  <span>{step.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </nav>
 
       <div className="px-5 mt-auto pt-4 border-t border-gray-800">
