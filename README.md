@@ -1,8 +1,19 @@
 # SonicSift
 
-> Local-first desktop app for processing large audio recordings — detect and remove noise/silence, enhance speech, export clean audio.
+<p align="center">
+  <img src="docs/logo-banner.svg" alt="SonicSift" width="700"/>
+</p>
 
-![Status](https://img.shields.io/badge/status-MVP%20scaffold-blue)
+<p align="center">
+  <strong>Local-first desktop app for processing large audio recordings</strong><br/>
+  Detect and remove noise/silence · Enhance speech · Export clean audio
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/status-MVP%20scaffold-blue" alt="Status"/>
+  <img src="https://img.shields.io/badge/platform-Windows%20|%20macOS%20|%20Linux-lightgrey" alt="Platform"/>
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="License"/>
+</p>
 
 ## Overview
 

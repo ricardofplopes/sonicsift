@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200" fill="none">
+  <defs>
+    <linearGradient id="bg-grad" x1="0" y1="0" x2="800" y2="200" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0a0f1e"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="bar-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6690ff"/>
+      <stop offset="100%" stop-color="#3d6bff"/>
+    </linearGradient>
+    <linearGradient id="text-grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#93b4ff"/>
+      <stop offset="100%" stop-color="#6690ff"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="200" rx="16" fill="url(#bg-grad)"/>
+  <rect width="800" height="200" rx="16" fill="none" stroke="#1e293b" stroke-width="1"/>
+
+  <!-- Icon circle -->
+  <circle cx="120" cy="100" r="56" fill="#111827" stroke="#1e293b" stroke-width="1"/>
+
+  <!-- Equalizer bars inside circle -->
+  <rect x="90"  y="112" width="8" height="26" rx="4" fill="url(#bar-grad)" opacity="0.75"/>
+  <rect x="102" y="92"  width="8" height="46" rx="4" fill="url(#bar-grad)" opacity="0.88"/>
+  <rect x="114" y="76"  width="8" height="62" rx="4" fill="url(#bar-grad)"/>
+  <rect x="126" y="88"  width="8" height="50" rx="4" fill="url(#bar-grad)" opacity="0.88"/>
+  <rect x="138" y="108" width="8" height="30" rx="4" fill="url(#bar-grad)" opacity="0.75"/>
+
+  <!-- Sieve arc -->
+  <path d="M88 142 Q120 154 150 142" stroke="#6690ff" stroke-width="2" stroke-linecap="round" fill="none" opacity="0.4"/>
+
+  <!-- Text: SonicSift -->
+  <text x="210" y="115" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="52" font-weight="700" fill="url(#text-grad)">
+    <tspan font-weight="800">Sonic</tspan><tspan font-weight="400" fill="#93b4ff">Sift</tspan>
+  </text>
+
+  <!-- Tagline -->
+  <text x="214" y="146" font-family="Inter, system-ui, sans-serif" font-size="16" fill="#6b7280" letter-spacing="3">
+    Process · Clean · Export
+  </text>
+
+  <!-- Decorative waveform on right side -->
+  <g opacity="0.08" stroke="#6690ff" stroke-width="1.5" fill="none">
+    <path d="M580 100 Q600 60 620 100 Q640 140 660 100 Q680 60 700 100 Q720 140 740 100 Q760 60 780 100"/>
+    <path d="M590 100 Q610 70 630 100 Q650 130 670 100 Q690 70 710 100 Q730 130 750 100 Q770 70 790 100" opacity="0.5"/>
+  </g>
+</svg>
