@@ -135,16 +135,16 @@ export default function Sidebar() {
                   {/* Number circle */}
                   <div
                     className={`
-                      w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0
+                      relative z-10 w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0
                       transition-all duration-300
                       ${
                         isCurrent
                           ? "bg-sonic-600 text-white shadow-[0_0_10px_rgba(61,107,255,0.4)]"
                           : isPast
-                            ? "bg-sonic-700/80 text-sonic-200"
+                            ? "bg-sonic-700 text-sonic-200"
                             : isAccessible
-                              ? "bg-gray-700/80 text-gray-400"
-                              : "bg-gray-800/40 text-gray-700"
+                              ? "bg-gray-700 text-gray-400"
+                              : "bg-gray-800 text-gray-600"
                       }
                     `}
                   >
