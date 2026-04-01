@@ -94,32 +94,31 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex-1 px-3">
-        <div className="relative">
-          {/* Continuous vertical line behind all steps */}
-          <div className="absolute left-[23px] top-[22px] bottom-[22px] w-px bg-gray-700/40" />
-          {/* Colored progress line overlay */}
-          {currentIndex > 0 && (
-            <div
-              className="absolute left-[23px] top-[22px] w-px bg-sonic-600/70 transition-all duration-500"
-              style={{
-                height: `calc(${((currentIndex) / (steps.length - 1)) * 100}% - 44px * ${1 - (currentIndex) / (steps.length - 1)})`,
-              }}
-            />
-          )}
+        <div className="flex flex-col">
+          {steps.map((step, index) => {
+            const isCurrent = step.path === location.pathname;
+            const isAccessible = step.canNavigate();
+            const isPast = index < currentIndex;
 
-          <div className="relative flex flex-col gap-1">
-            {steps.map((step, index) => {
-              const isCurrent = step.path === location.pathname;
-              const isAccessible = step.canNavigate();
-              const isPast = index < currentIndex;
+            return (
+              <div key={step.path}>
+                {/* Connecting line segment between previous and this step */}
+                {index > 0 && (
+                  <div className="flex justify-start pl-[21px]">
+                    <div
+                      className={`w-px h-3 transition-colors duration-300 ${
+                        isPast || isCurrent ? "bg-sonic-600/70" : "bg-gray-700/30"
+                      }`}
+                    />
+                  </div>
+                )}
 
-              return (
+                {/* Step button */}
                 <button
-                  key={step.path}
                   onClick={() => isAccessible && navigate(step.path)}
                   disabled={!isAccessible}
                   className={`
-                    relative w-full flex items-center gap-3 px-2 py-2 rounded-lg text-left text-sm font-medium
+                    w-full flex items-center gap-3 px-2 py-2 rounded-lg text-left text-sm font-medium
                     transition-all duration-200
                     ${
                       isCurrent
@@ -128,14 +127,14 @@ export default function Sidebar() {
                           ? "text-gray-300 hover:bg-gray-800/70"
                           : isAccessible
                             ? "text-gray-400 hover:bg-gray-800/70 hover:text-gray-200"
-                            : "text-gray-600 cursor-not-allowed opacity-40"
+                            : "text-gray-600 cursor-not-allowed"
                     }
                   `}
                 >
                   {/* Number circle */}
                   <div
                     className={`
-                      relative z-10 w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0
+                      w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0
                       transition-all duration-300
                       ${
                         isCurrent
@@ -171,9 +170,9 @@ export default function Sidebar() {
                   {/* Label */}
                   <span>{step.label}</span>
                 </button>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </div>
       </nav>
 
