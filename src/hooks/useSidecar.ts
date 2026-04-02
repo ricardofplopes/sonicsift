@@ -1,32 +1,25 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback } from "react";
 import { useJobStore } from "@/stores/jobStore";
-import { Command } from "@tauri-apps/plugin-shell";
+import { invoke } from "@tauri-apps/api/core";
 import type { Segment, SidecarMessage } from "@/types";
 
 /**
- * Set to `false` once the Python sidecar binary is bundled at
- * `src-tauri/binaries/sonicsift-worker-<target-triple>[.exe]`.
+ * Set to `true` to use simulated responses (no Python needed).
+ * Set to `false` to spawn the real Python backend via `invoke`.
  */
-const MOCK_MODE = true;
-
-interface ChildProcess {
-  write(data: string): Promise<void>;
-  kill(): Promise<void>;
-  pid: number;
-}
+const MOCK_MODE = false;
 
 /**
- * Custom hook to communicate with the Python sidecar via JSON-over-stdio.
+ * Custom hook to communicate with the Python backend.
  *
- * In mock mode, it simulates sidecar responses for development without a
- * compiled Rust backend / Python worker.
+ * In real mode the Rust `run_python` command spawns `python -m sonicsift.main`,
+ * sends a single JSON command on stdin, and returns all stdout once the process
+ * exits.  Each stdout line is a newline-delimited JSON message that gets
+ * translated into the frontend's `SidecarMessage` format.
+ *
+ * In mock mode it simulates sidecar responses for development without Python.
  */
 export function useSidecar() {
-  const [isReady, setIsReady] = useState(false);
-  const [mockFallback, setMockFallback] = useState(false);
-  const childRef = useRef<ChildProcess | null>(null);
-  const isMocked = MOCK_MODE || mockFallback;
-
   const handleMessage = useCallback((msg: SidecarMessage) => {
     const state = useJobStore.getState();
     const { payload } = msg;
@@ -91,87 +84,159 @@ export function useSidecar() {
     }
   }, []);
 
-  const spawnSidecar = useCallback(async () => {
-    if (childRef.current) return;
-
-    if (MOCK_MODE) {
-      console.log("[sidecar] Running in mock mode");
-      setIsReady(true);
-      return;
-    }
-
-    try {
-      const command = Command.sidecar("binaries/sonicsift-worker");
-
-      command.stdout.on("data", (line: string) => {
-        try {
-          const msg: SidecarMessage = JSON.parse(line);
-          handleMessage(msg);
-        } catch {
-          console.warn("[sidecar] Non-JSON stdout:", line);
-        }
-      });
-
-      command.stderr.on("data", (line: string) => {
-        console.error("[sidecar stderr]", line);
-        useJobStore.getState().addLog("warn", `[stderr] ${line}`);
-      });
-
-      command.on("close", (data) => {
-        console.log("[sidecar] Exited with code:", data.code);
-        childRef.current = null;
-        setIsReady(false);
-      });
-
-      const child = await command.spawn();
-      childRef.current = child as unknown as ChildProcess;
-      setIsReady(true);
-    } catch (err) {
-      console.error("[sidecar] Failed to spawn, falling back to mock mode:", err);
-      setMockFallback(true);
-      setIsReady(true);
-    }
-  }, [handleMessage]);
-
   const sendCommand = useCallback(
     async (type: string, payload: Record<string, unknown> = {}) => {
-      if (!childRef.current && !isMocked) {
-        await spawnSidecar();
-      }
-      if (!isReady && !isMocked) {
-        await spawnSidecar();
-      }
-
-      const message = JSON.stringify({ type, payload }) + "\n";
-
-      if (isMocked) {
-        console.log("[sidecar mock] Sending:", message.trim());
+      if (MOCK_MODE) {
+        console.log("[sidecar mock] Sending:", JSON.stringify({ type, payload }));
         simulateMockResponse(type, payload, handleMessage);
         return;
       }
 
-      if (childRef.current) {
-        await childRef.current.write(message);
+      // Build the JSON command that the Python backend expects.
+      // The Python main loop reads `msg["command"]` (not `type`) and passes
+      // `msg["payload"]` to the handler, which expects snake_case config keys.
+      const pythonPayload = buildPythonPayload(type, payload);
+      const commandJson = JSON.stringify({
+        command: type,
+        payload: pythonPayload,
+      });
+
+      console.log("[sidecar] Invoking Python with:", commandJson);
+
+      try {
+        const result = await invoke<string>("run_python", { commandJson });
+
+        // Parse the newline-delimited JSON messages that Python wrote to stdout
+        // and translate them into the frontend message format.
+        const lines = result.trim().split("\n");
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const msg = JSON.parse(line);
+            const translated = translatePythonMessage(msg);
+            if (translated) {
+              handleMessage(translated);
+            }
+          } catch {
+            console.warn("[sidecar] Non-JSON line from Python:", line);
+          }
+        }
+      } catch (err) {
+        console.error("[sidecar] Python invoke failed:", err);
+        useJobStore.getState().setError(String(err));
       }
     },
-    [isReady, isMocked, spawnSidecar, handleMessage],
+    [handleMessage],
   );
 
   const killSidecar = useCallback(async () => {
-    if (isMocked) {
-      console.log("[sidecar mock] Kill requested");
-      setIsReady(false);
-      return;
-    }
+    // In invoke mode each command is a separate short-lived process — nothing
+    // persistent to kill.
+    console.log("[sidecar] Kill requested (no-op in invoke mode)");
+  }, []);
 
-    if (childRef.current) {
-      await childRef.current.kill();
-      childRef.current = null;
-      setIsReady(false);
-    }
-  }, [isMocked]);
+  return { sendCommand, killSidecar, isReady: true };
+}
 
-  return { sendCommand, killSidecar, isReady: isMocked || isReady };
+// ---------------------------------------------------------------------------
+// Python payload / message translation
+// ---------------------------------------------------------------------------
+
+/**
+ * Map frontend payload fields to the format expected by the Python backend
+ * (`filePath` instead of `inputPath`, settings nested under `config` with
+ * snake_case keys, etc.).
+ */
+function buildPythonPayload(
+  type: string,
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  const jobId = useJobStore.getState().job.id || "";
+
+  if (type === "analyze") {
+    return {
+      jobId,
+      filePath: payload.inputPath as string,
+      config: {
+        silence_threshold_db: payload.silenceThresholdDb,
+        min_silence_duration: payload.minSilenceDuration,
+        kept_padding_ms: payload.keptPaddingMs,
+        enhancement_strength: payload.enhancementStrength,
+        output_format: payload.outputFormat,
+      },
+    };
+  }
+
+  if (type === "export") {
+    return {
+      jobId,
+      filePath: payload.inputPath as string,
+      outputPath: payload.outputPath as string,
+      segments: payload.segments,
+      config: {
+        output_format: (payload.format as string) || "wav",
+        enhancement_strength: (payload.enhancementStrength as number) ?? 0.5,
+      },
+    };
+  }
+
+  return { jobId, ...payload };
+}
+
+/**
+ * Translate a Python backend message (`analyzeResult`, `exportResult`,
+ * `progress` with `percent`/`stage`) into the frontend `SidecarMessage`
+ * format (`segments`, `complete`, `progress` with `progress`/`phase`).
+ */
+function translatePythonMessage(
+  msg: Record<string, unknown>,
+): SidecarMessage | null {
+  const msgType = msg.type as string;
+  const payload = (msg.payload || {}) as Record<string, unknown>;
+
+  switch (msgType) {
+    case "progress":
+      return {
+        type: "progress",
+        payload: {
+          progress: payload.percent as number,
+          phase: payload.stage as string,
+        },
+      };
+
+    case "analyzeResult":
+      return {
+        type: "segments",
+        payload: {
+          segments: payload.segments,
+        },
+      };
+
+    case "exportResult":
+      return {
+        type: "complete",
+        payload: {
+          outputPath: payload.outputPath as string,
+        },
+      };
+
+    case "error":
+      return {
+        type: "error",
+        payload: {
+          message: payload.message as string,
+        },
+      };
+
+    case "pong":
+    case "cancelled":
+      console.log(`[sidecar] Received ${msgType}`);
+      return null;
+
+    default:
+      console.warn("[sidecar] Unknown Python message type:", msgType);
+      return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
