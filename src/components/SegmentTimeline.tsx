@@ -30,8 +30,56 @@ export default function SegmentTimeline({
         <span>{formatDuration(totalDuration)}</span>
       </div>
 
+      {/* Waveform visualization */}
+      <div className="flex w-full h-16 items-end rounded-t-lg overflow-hidden border border-b-0 border-gray-700 bg-gray-900/80">
+        {segments.map((seg, i) => {
+          const widthPercent = (seg.duration / totalDuration) * 100;
+          const barCount = Math.max(2, Math.round(widthPercent * 0.8));
+          const isSpeech = seg.segmentType === "speech";
+          const opacity = seg.keep ? 1 : 0.25;
+
+          return (
+            <div
+              key={`wf-${i}`}
+              className="h-full flex items-end gap-px cursor-pointer"
+              style={{ width: `${widthPercent}%`, opacity }}
+              onClick={() => onToggle(i)}
+              onMouseEnter={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const cRect = containerRef.current?.getBoundingClientRect();
+                if (cRect) {
+                  setHovered({
+                    index: i,
+                    left: rect.left - cRect.left + rect.width / 2,
+                    top: rect.top - cRect.top,
+                  });
+                }
+              }}
+              onMouseLeave={() => setHovered(null)}
+            >
+              {Array.from({ length: barCount }, (_, j) => {
+                const seed = (i * 127 + j * 31) % 100;
+                const baseHeight = isSpeech ? 30 + seed * 0.6 : 5 + seed * 0.12;
+                const height = Math.min(95, Math.max(4, baseHeight));
+                const color = isSpeech
+                  ? seg.keep ? "bg-emerald-500" : "bg-red-500"
+                  : seg.keep ? "bg-emerald-800" : "bg-red-900";
+
+                return (
+                  <div
+                    key={j}
+                    className={`flex-1 min-w-[1px] rounded-t-sm ${color} transition-all duration-200`}
+                    style={{ height: `${height}%` }}
+                  />
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+
       {/* Timeline bar */}
-      <div className="flex w-full h-10 rounded-lg overflow-hidden border border-gray-700 bg-gray-900">
+      <div className="flex w-full h-10 rounded-b-lg overflow-hidden border border-t-0 border-gray-700 bg-gray-900">
         {segments.map((seg, i) => {
           const widthPercent = (seg.duration / totalDuration) * 100;
           const isSpeech = seg.segmentType === "speech";

@@ -55,15 +55,33 @@ export default function ImportPage() {
       e.preventDefault();
       setIsDragging(false);
 
-      // In Tauri, OS drag-drop delivers file paths through Tauri's
-      // drag-drop event system, not the browser DragEvent.
-      // Metadata extraction requires the Python sidecar.
-      setDropMessage(
-        "Drag & drop from the OS is detected, but metadata extraction " +
-          "requires the sidecar. Please use the file picker instead.",
-      );
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        const file = files[0];
+        const filePath = (file as any).path || file.name;
+        const fileName = file.name;
+        const supportedExts = ['wav', 'mp3', 'flac', 'ogg', 'aac', 'm4a', 'wma'];
+        const ext = fileName.split('.').pop()?.toLowerCase() || '';
+
+        if (!supportedExts.includes(ext)) {
+          setDropMessage(`Unsupported format: .${ext}`);
+          return;
+        }
+
+        const audioFile: AudioFile = {
+          path: filePath,
+          name: fileName,
+          size: file.size,
+          duration: 0,
+          sampleRate: 0,
+          channels: 0,
+          codec: ext,
+        };
+        setAudioFile(audioFile);
+        setDropMessage(null);
+      }
     },
-    [],
+    [setAudioFile],
   );
 
   return (
@@ -91,8 +109,8 @@ export default function ImportPage() {
           transition-all duration-300
           ${
             isDragging
-              ? "border-sonic-400 bg-sonic-600/10 animate-pulse-border scale-[1.01]"
-              : "border-gray-600 hover:border-gray-500 bg-gray-800/50"
+              ? "border-sonic-400 bg-sonic-600/10 animate-pulse-border scale-[1.01] shadow-[0_0_20px_rgba(61,107,255,0.15)]"
+              : "border-gray-600 hover:border-gray-500 hover:brightness-110 bg-gray-800/50 active:scale-[0.98]"
           }
         `}
         onClick={handleChooseFile}
@@ -120,14 +138,29 @@ export default function ImportPage() {
         </svg>
 
         <div className="relative z-10 flex flex-col items-center gap-3">
-          <div className="w-16 h-16 rounded-full bg-gray-700/50 flex items-center justify-center text-3xl">
-            🎵
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 ${
+            isDragging
+              ? "bg-sonic-600/30 scale-110"
+              : "bg-gray-700/50"
+          }`}>
+            {isDragging ? (
+              <svg className="w-8 h-8 text-sonic-400" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 17h14" />
+                <path d="M10 3v10m0 0l-4-4m4 4l4-4" />
+              </svg>
+            ) : (
+              <svg className="w-8 h-8 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18V5l12-2v13" />
+                <circle cx="6" cy="18" r="3" />
+                <circle cx="18" cy="16" r="3" />
+              </svg>
+            )}
           </div>
           <span className="text-gray-200 font-semibold text-lg">
-            Drop your audio file here
+            {isDragging ? "Release to import" : "Drop your audio file here"}
           </span>
           <span className="text-gray-500 text-sm">
-            or click anywhere to browse
+            {isDragging ? "" : "or click anywhere to browse"}
           </span>
         </div>
       </div>

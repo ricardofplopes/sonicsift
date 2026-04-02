@@ -13,6 +13,10 @@ export default function ReviewPage() {
   const keptSegments = segments.filter((s) => s.keep);
   const estimatedOutput = keptSegments.reduce((sum, s) => sum + s.duration, 0);
 
+  const allKept = segments.length > 0 && segments.every(s => s.keep);
+  const allSilenceDiscarded = segments.length > 0 &&
+    segments.every(s => s.segmentType === "speech" ? s.keep : !s.keep);
+
   const handleKeepAll = () => {
     segments.forEach((_, i) => {
       if (!segments[i].keep) toggleSegmentKeep(i);
@@ -53,13 +57,37 @@ export default function ReviewPage() {
         />
       </div>
 
-      {/* Bulk actions */}
-      <div className="flex gap-3">
-        <button onClick={handleKeepAll} className="btn-secondary">
-          Keep All
+      {/* Bulk actions - segmented toggle */}
+      <div className="flex gap-0.5 bg-gray-800 p-1 rounded-lg">
+        <button
+          onClick={handleKeepAll}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+            allKept
+              ? "bg-emerald-600 text-white shadow-sm"
+              : "text-gray-400 hover:text-gray-200 hover:bg-gray-700/50"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 10.5l4 4L16 6" />
+            </svg>
+            Keep All
+          </span>
         </button>
-        <button onClick={handleDiscardAllSilence} className="btn-secondary">
-          Discard All Silence
+        <button
+          onClick={handleDiscardAllSilence}
+          className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+            allSilenceDiscarded
+              ? "bg-red-600 text-white shadow-sm"
+              : "text-gray-400 hover:text-gray-200 hover:bg-gray-700/50"
+          }`}
+        >
+          <span className="flex items-center gap-2">
+            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 4l8 12M14 4L6 16" />
+            </svg>
+            Discard All Silence
+          </span>
         </button>
       </div>
 

@@ -14,22 +14,43 @@ fn get_app_data_dir(app: tauri::AppHandle) -> Result<String, String> {
         .map_err(|e| e.to_string())
 }
 
+/// Find the backend directory by searching multiple locations.
+fn find_backend_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+    // 1. Resource dir (bundled app via NSIS installer)
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let backend = resource_dir.join("backend");
+        if backend.join("sonicsift").exists() {
+            return Ok(backend);
+        }
+    }
+
+    // 2. Next to the executable (portable / dev build)
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            let backend = exe_dir.join("backend");
+            if backend.join("sonicsift").exists() {
+                return Ok(backend);
+            }
+        }
+    }
+
+    // 3. Current working directory (development: pnpm tauri dev)
+    if let Ok(cwd) = std::env::current_dir() {
+        let backend = cwd.join("backend");
+        if backend.join("sonicsift").exists() {
+            return Ok(backend);
+        }
+    }
+
+    Err("Backend directory not found. Searched resource dir, exe dir, and CWD.".into())
+}
+
 /// Spawn the Python backend, send a single JSON command on stdin, and return
 /// all of stdout once the process exits.  Each line of stdout is a
 /// newline-delimited JSON message that the frontend parses.
 #[tauri::command]
-async fn run_python(command_json: String) -> Result<String, String> {
-    let cwd = std::env::current_dir()
-        .map_err(|e| format!("Failed to get working directory: {e}"))?;
-    let backend_dir = cwd.join("backend");
-
-    if !backend_dir.exists() {
-        return Err(format!(
-            "Backend directory not found at '{}'. \
-             Make sure you are running from the project root.",
-            backend_dir.display()
-        ));
-    }
+async fn run_python(app: tauri::AppHandle, command_json: String) -> Result<String, String> {
+    let backend_dir = find_backend_dir(&app)?;
 
     let mut cmd = StdCommand::new("python");
     cmd.args(["-m", "sonicsift.main"])

@@ -102,8 +102,12 @@ export default function ExportPage() {
       {/* Success message */}
       {isComplete && (
         <div className="card w-full max-w-lg border-emerald-700 bg-emerald-900/20 text-center">
-          <p className="text-emerald-400 text-lg font-semibold mb-2">
-            ✅ Export Complete!
+          <p className="text-emerald-400 text-lg font-semibold mb-2 flex items-center justify-center gap-2">
+            <svg className="w-6 h-6 text-emerald-400" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="10" cy="10" r="8" />
+              <path d="M6.5 10.5l2 2L13.5 7.5" />
+            </svg>
+            Export Complete!
           </p>
           <p className="text-gray-300 text-sm break-all">
             {job.outputPath}
@@ -127,7 +131,11 @@ export default function ExportPage() {
             disabled={!outputPath || isExporting}
             className="btn-primary px-8 py-3 text-lg"
           >
-            Export 💾
+            <svg className="w-5 h-5 inline-block mr-1 -mt-0.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 13v3a1 1 0 001 1h12a1 1 0 001-1v-3" />
+              <path d="M10 13V3m0 0l4 4m-4-4L6 7" />
+            </svg>
+            Export
           </button>
         )}
         {isComplete && (

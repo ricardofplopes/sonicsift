@@ -68,7 +68,7 @@ export default function Sidebar() {
       iconKey: "process",
       canNavigate: () =>
         audioFile !== null &&
-        (job.status === "analyzing" || job.status === "reviewing"),
+        (job.status === "analyzing" || job.status === "reviewing" || job.status === "exporting" || job.status === "complete"),
     },
     {
       path: "/review",
