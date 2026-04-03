@@ -31,17 +31,24 @@ class TestApplyPadding:
         segments = [
             Segment(start=2.0, end=4.0, duration=2.0, segment_type="speech", keep=True),
         ]
-        result = apply_padding(segments, padding_ms=500)
-        assert len(result) == 1
-        assert result[0].start == 1.5  # 2.0 - 0.5
-        assert result[0].end == 4.5    # 4.0 + 0.5
+        result = apply_padding(segments, padding_ms=500, total_duration=6.0)
+        speech = [s for s in result if s.segment_type == "speech"]
+        assert len(speech) == 1
+        assert speech[0].start == 1.5  # 2.0 - 0.5
+        assert speech[0].end == 4.5    # 4.0 + 0.5
+        # Should also have leading and trailing silence
+        assert result[0].segment_type == "silence"
+        assert result[0].end == 1.5
+        assert result[-1].segment_type == "silence"
+        assert result[-1].start == 4.5
 
     def test_padding_does_not_go_negative(self) -> None:
         segments = [
             Segment(start=0.1, end=1.0, duration=0.9, segment_type="speech", keep=True),
         ]
-        result = apply_padding(segments, padding_ms=500)
-        assert result[0].start == 0.0
+        result = apply_padding(segments, padding_ms=500, total_duration=2.0)
+        speech = [s for s in result if s.segment_type == "speech"]
+        assert speech[0].start == 0.0
 
     def test_overlapping_speech_segments_are_merged(self) -> None:
         segments = [
@@ -51,7 +58,7 @@ class TestApplyPadding:
         ]
         # With 500 ms padding the first speech expands to [0.5, 3.5] and the
         # second to [3.0, 5.5] — they overlap and should merge.
-        result = apply_padding(segments, padding_ms=500)
+        result = apply_padding(segments, padding_ms=500, total_duration=6.0)
         speech_segments = [s for s in result if s.segment_type == "speech"]
         assert len(speech_segments) == 1
         assert speech_segments[0].start == 0.5
@@ -62,6 +69,6 @@ class TestApplyPadding:
         segments = [
             Segment(start=0.0, end=2.0, duration=2.0, segment_type="silence", keep=False),
         ]
-        result = apply_padding(segments, padding_ms=200)
+        result = apply_padding(segments, padding_ms=200, total_duration=2.0)
         assert result[0].start == 0.0
         assert result[0].end == 2.0

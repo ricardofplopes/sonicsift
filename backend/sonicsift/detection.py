@@ -89,7 +89,7 @@ def detect_segments(
             )
         )
 
-    segments = apply_padding(segments, config.kept_padding_ms)
+    segments = apply_padding(segments, config.kept_padding_ms, total_duration)
     log.info(
         "Detected %d segments (%d kept) in %s",
         len(segments),
@@ -102,25 +102,29 @@ def detect_segments(
 def apply_padding(
     segments: list[Segment],
     padding_ms: int,
+    total_duration: float = 0.0,
 ) -> list[Segment]:
     """Extend speech segments by *padding_ms* and merge overlapping ones.
 
-    Silence segments that are fully consumed by expanded speech neighbours
-    are dropped.  Adjacent speech segments whose padded ranges overlap are
-    merged into a single segment.
+    After merging speech, reconstructs the full timeline by filling gaps
+    between speech segments with silence.
     """
     if not segments:
         return []
 
     padding_s = padding_ms / 1000.0
 
+    # Infer total_duration from segments if not provided
+    if total_duration <= 0 and segments:
+        total_duration = max(s.end for s in segments)
+
     # --- Step 1: expand speech segments ---
-    expanded: list[Segment] = []
+    speech_intervals: list[Segment] = []
     for seg in segments:
         if seg.segment_type == "speech":
             new_start = max(seg.start - padding_s, 0.0)
-            new_end = seg.end + padding_s
-            expanded.append(
+            new_end = min(seg.end + padding_s, total_duration) if total_duration > 0 else seg.end + padding_s
+            speech_intervals.append(
                 Segment(
                     start=new_start,
                     end=new_end,
@@ -129,12 +133,12 @@ def apply_padding(
                     keep=True,
                 )
             )
-        else:
-            expanded.append(seg)
 
-    # --- Step 2: collect only the speech intervals and merge overlaps ---
-    speech_intervals: list[Segment] = [s for s in expanded if s.segment_type == "speech"]
+    if not speech_intervals:
+        # No speech at all — return silence segments unchanged.
+        return [s for s in segments if s.segment_type == "silence"]
 
+    # --- Step 2: merge overlapping speech intervals ---
     merged_speech: list[Segment] = []
     for seg in speech_intervals:
         if merged_speech and seg.start <= merged_speech[-1].end:
@@ -150,24 +154,33 @@ def apply_padding(
         else:
             merged_speech.append(seg)
 
-    # --- Step 3: rebuild the timeline, interleaving silence gaps ---
+    # --- Step 3: rebuild the full timeline with silence gaps ---
     result: list[Segment] = []
-    sil_segments = [s for s in expanded if s.segment_type == "silence"]
-
-    if not merged_speech:
-        # No speech at all — return the original silence segments unchanged.
-        return sil_segments
+    cursor = 0.0
 
     for speech in merged_speech:
-        # Insert silence segments that fall before this speech segment
-        for sil in sil_segments:
-            if sil.end <= speech.start and (not result or sil.start >= result[-1].end):
-                result.append(sil)
+        # Silence gap before this speech segment
+        if speech.start > cursor + 0.001:
+            gap_start = cursor
+            gap_end = speech.start
+            result.append(Segment(
+                start=round(gap_start, 6),
+                end=round(gap_end, 6),
+                duration=round(gap_end - gap_start, 6),
+                segment_type="silence",
+                keep=False,
+            ))
         result.append(speech)
+        cursor = speech.end
 
     # Trailing silence after the last speech segment
-    for sil in sil_segments:
-        if result and sil.start >= result[-1].end:
-            result.append(sil)
+    if total_duration > 0 and cursor < total_duration - 0.001:
+        result.append(Segment(
+            start=round(cursor, 6),
+            end=round(total_duration, 6),
+            duration=round(total_duration - cursor, 6),
+            segment_type="silence",
+            keep=False,
+        ))
 
     return result
