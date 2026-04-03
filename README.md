@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-MVP%20scaffold-blue" alt="Status"/>
+  <img src="https://img.shields.io/badge/status-MVP-blue" alt="Status"/>
   <img src="https://img.shields.io/badge/platform-Windows%20|%20macOS%20|%20Linux-lightgrey" alt="Platform"/>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License"/>
 </p>
@@ -202,17 +202,15 @@ cd docker
 docker compose -f docker-compose.dev.yml up --build
 ```
 
-## Next Steps (TODOs)
+## Next Steps
 
-- [ ] Build and test the Tauri desktop shell end-to-end
-- [ ] Wire sidecar communication with real Python worker
-- [ ] Add waveform visualization in segment review
 - [ ] Implement audio preview/playback for segments
-- [ ] Add noisereduce / demucs enhancement pipelines
+- [ ] Add demucs source-separation enhancement pipeline
 - [ ] Add job persistence and resume capability
-- [ ] Package for distribution (Windows installer, macOS DMG, Linux AppImage)
-- [ ] Add automated tests for the full pipeline
+- [ ] Package Python backend as frozen executable (PyInstaller) for standalone distribution
+- [ ] Add automated integration tests for the full pipeline
 - [ ] Performance optimization for very large files (12+ hours)
+- [ ] macOS DMG and Linux AppImage packaging
 
 ## License
 

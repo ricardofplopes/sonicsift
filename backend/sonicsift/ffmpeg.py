@@ -154,14 +154,19 @@ def extract_segment(
     start: float,
     end: float,
 ) -> None:
-    """Extract the time range [*start*, *end*) from *input_path*."""
+    """Extract the time range [*start*, *end*) from *input_path*.
+
+    Always transcodes to PCM WAV to ensure compatibility regardless of
+    the input codec.
+    """
     duration = end - start
     _run_ffmpeg([
         "ffmpeg", "-y",
         "-ss", str(start),
         "-t", str(duration),
         "-i", input_path,
-        "-c", "copy",
+        "-acodec", "pcm_s16le",
+        "-ar", "44100",
         output_path,
     ])
     log.debug("Extracted segment %.2f–%.2f → %s", start, end, output_path)

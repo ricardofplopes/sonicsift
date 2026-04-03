@@ -21,6 +21,11 @@ python -m sonicsift.main                                            # Run worker
 
 Prerequisites: Node ≥20, pnpm ≥9, Rust ≥1.77, Python ≥3.11, FFmpeg ≥6.0 on PATH.
 
+**Important build notes:**
+- `pnpm tauri build` always produces both the exe **and** the NSIS installer at `src-tauri/target/release/bundle/nsis/SonicSift_*_x64-setup.exe`. Always verify the installer is regenerated.
+- Kill any running `sonicsift.exe` before rebuilding — the build will fail with "os error 32" (file in use) otherwise.
+- On Windows, Rust may not be on PATH in new shells. Use: `$env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"` before `pnpm tauri build`.
+
 ## Architecture
 
 SonicSift is a local-first desktop app for processing large audio files (up to 12h). It uses a **three-layer** architecture:
@@ -96,5 +101,6 @@ Async logic lives in hooks/components, not in stores.
 
 - **Tauri v2** — permissions go in `src-tauri/capabilities/default.json`, **not** in `plugins` config in `tauri.conf.json`.
 - **Bundle target**: NSIS only (`"targets": ["nsis"]`). WiX/MSI is not used.
-- **Backend discovery**: `find_backend_dir()` searches resource dir → exe dir → CWD, supporting both installed and development modes.
-- **Windows**: `CREATE_NO_WINDOW` flag (`0x0800_0000`) on spawned Python processes to prevent console flash.
+- **Backend discovery**: `find_backend_dir()` searches resource dir → exe ancestors (up to 6 levels) → CWD, supporting both installed and development modes.
+- **Windows**: `CREATE_NO_WINDOW` flag (`0x0800_0000`) on spawned Python processes to prevent console flash. PATH is explicitly set to include WinGet/Scoop/Chocolatey tool directories.
+- **FFmpeg codec handling**: `extract_segment` always transcodes to PCM WAV (`-acodec pcm_s16le`) — never use `-c copy` since input codecs (AAC, MP3, etc.) aren't compatible with the WAV container.
