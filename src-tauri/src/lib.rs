@@ -34,6 +34,23 @@ fn find_backend_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String
         }
     }
 
+    // 2b. Walk up from exe directory (handles dev builds: src-tauri/target/release/)
+    if let Ok(exe) = std::env::current_exe() {
+        let mut dir = exe.parent().map(|p| p.to_path_buf());
+        for _ in 0..6 {
+            match dir {
+                Some(ref d) => {
+                    let backend = d.join("backend");
+                    if backend.join("sonicsift").exists() {
+                        return Ok(backend);
+                    }
+                    dir = d.parent().map(|p| p.to_path_buf());
+                }
+                None => break,
+            }
+        }
+    }
+
     // 3. Current working directory (development: pnpm tauri dev)
     if let Ok(cwd) = std::env::current_dir() {
         let backend = cwd.join("backend");
@@ -42,7 +59,10 @@ fn find_backend_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String
         }
     }
 
-    Err("Backend directory not found. Searched resource dir, exe dir, and CWD.".into())
+    Err(format!(
+        "Backend directory not found. Searched resource dir, exe ancestors (up to 6 levels), and CWD. \
+         Make sure the 'backend/sonicsift/' directory exists relative to the executable or project root."
+    ))
 }
 
 /// Spawn the Python backend, send a single JSON command on stdin, and return

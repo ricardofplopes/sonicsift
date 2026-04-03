@@ -1,8 +1,9 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useJobStore } from "@/stores/jobStore";
 import Logo from "@/components/Logo";
 import { open } from "@tauri-apps/plugin-dialog";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AudioFile } from "@/types";
 
 function extractFileName(filePath: string): string {
@@ -50,39 +51,52 @@ export default function ImportPage() {
     }
   }, [setAudioFile]);
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
+  // Listen for Tauri's native drag-drop events to get full file paths
+  useEffect(() => {
+    const supportedExts = ["wav", "mp3", "flac", "ogg", "aac", "m4a", "wma"];
+    let cancelled = false;
 
-      const files = e.dataTransfer.files;
-      if (files.length > 0) {
-        const file = files[0];
-        const filePath = (file as any).path || file.name;
-        const fileName = file.name;
-        const supportedExts = ['wav', 'mp3', 'flac', 'ogg', 'aac', 'm4a', 'wma'];
-        const ext = fileName.split('.').pop()?.toLowerCase() || '';
+    const unlistenPromise = getCurrentWindow().onDragDropEvent((event) => {
+      if (cancelled) return;
 
-        if (!supportedExts.includes(ext)) {
-          setDropMessage(`Unsupported format: .${ext}`);
-          return;
+      if (event.payload.type === "enter") {
+        setIsDragging(true);
+      } else if (event.payload.type === "leave") {
+        setIsDragging(false);
+      } else if (event.payload.type === "drop") {
+        setIsDragging(false);
+
+        const paths = event.payload.paths;
+        if (paths.length > 0) {
+          const filePath = paths[0];
+          const fileName = extractFileName(filePath);
+          const ext = fileName.split(".").pop()?.toLowerCase() || "";
+
+          if (!supportedExts.includes(ext)) {
+            setDropMessage(`Unsupported format: .${ext}`);
+            return;
+          }
+
+          const audioFile: AudioFile = {
+            path: filePath,
+            name: fileName,
+            size: 0,
+            duration: 0,
+            sampleRate: 0,
+            channels: 0,
+            codec: ext,
+          };
+          useJobStore.getState().setAudioFile(audioFile);
+          setDropMessage(null);
         }
-
-        const audioFile: AudioFile = {
-          path: filePath,
-          name: fileName,
-          size: file.size,
-          duration: 0,
-          sampleRate: 0,
-          channels: 0,
-          codec: ext,
-        };
-        setAudioFile(audioFile);
-        setDropMessage(null);
       }
-    },
-    [setAudioFile],
-  );
+    });
+
+    return () => {
+      cancelled = true;
+      unlistenPromise.then((unlisten) => unlisten());
+    };
+  }, []);
 
   return (
     <div className="flex flex-col items-center justify-center h-full gap-6 p-8 animate-fade-in">
@@ -97,12 +111,6 @@ export default function ImportPage() {
 
       {/* Drop zone */}
       <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragging(true);
-        }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={handleDrop}
         className={`
           relative w-full max-w-lg h-56 rounded-xl border-2 border-dashed overflow-hidden
           flex flex-col items-center justify-center gap-3 cursor-pointer
