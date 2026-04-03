@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { useJobStore } from "@/stores/jobStore";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { Segment, SidecarMessage } from "@/types";
 
 /**
@@ -103,27 +104,29 @@ export function useSidecar() {
 
       console.log("[sidecar] Invoking Python with:", commandJson);
 
-      try {
-        const result = await invoke<string>("run_python", { commandJson });
-
-        // Parse the newline-delimited JSON messages that Python wrote to stdout
-        // and translate them into the frontend message format.
-        const lines = result.trim().split("\n");
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const msg = JSON.parse(line);
-            const translated = translatePythonMessage(msg);
-            if (translated) {
-              handleMessage(translated);
-            }
-          } catch {
-            console.warn("[sidecar] Non-JSON line from Python:", line);
+      // Set up real-time event listener BEFORE invoking
+      const unlisten = await listen<string>("python-output", (event) => {
+        const line = event.payload;
+        if (!line.trim()) return;
+        try {
+          const msg = JSON.parse(line);
+          const translated = translatePythonMessage(msg);
+          if (translated) {
+            handleMessage(translated);
           }
+        } catch {
+          // Non-JSON line, ignore
         }
+      });
+
+      try {
+        await invoke<string>("run_python", { commandJson });
+        // No need to parse result here - events already handled in real-time
       } catch (err) {
         console.error("[sidecar] Python invoke failed:", err);
         useJobStore.getState().setError(String(err));
+      } finally {
+        unlisten();
       }
     },
     [handleMessage],

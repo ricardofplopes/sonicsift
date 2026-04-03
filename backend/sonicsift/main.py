@@ -85,34 +85,35 @@ def _handle_analyze(payload: dict[str, Any]) -> None:
 
     _cancel_event.clear()
 
-    # 1. Ingest
-    _send_progress(job_id, "ingest", 0)
+    # 1. Ingest (0–10%)
+    _send_progress(job_id, "Validating file…", 0)
     try:
         metadata = validate_file(file_path)
     except IngestError as exc:
         _send_error(job_id, str(exc))
         return
-    _send_progress(job_id, "ingest", 100)
+    _send_progress(job_id, "File validated", 10)
 
     if _cancelled():
         return
 
-    # 2. Chunking
-    _send_progress(job_id, "chunking", 0)
+    # 2. Chunking (10–15%)
+    _send_progress(job_id, "Planning chunks…", 12)
     chunks = plan_chunks(metadata["duration"], config.chunk_duration_s)
-    _send_progress(job_id, "chunking", 100)
+    _send_progress(job_id, "Chunks planned", 15)
 
     if _cancelled():
         return
 
-    # 3. Detection
-    _send_progress(job_id, "detection", 0)
+    # 3. Detection (15–95%) — the bulk of the work
+    _send_progress(job_id, "Detecting silence (this may take a while)…", 18)
     try:
         segments = detect_segments(file_path, config)
     except Exception as exc:
         _send_error(job_id, f"Detection failed: {exc}")
         return
-    _send_progress(job_id, "detection", 100)
+    _send_progress(job_id, "Detection complete", 95)
+    _send_progress(job_id, "Analysis complete", 100)
 
     _send({
         "type": "analyzeResult",
@@ -158,12 +159,13 @@ def _handle_export(payload: dict[str, Any]) -> None:
     intermediate_files: list[str] = []
 
     try:
-        # 1. Enhance each kept segment
+        # 1. Enhance each kept segment (0–70% of export)
         total = len(segment_defs)
         for i, seg in enumerate(segment_defs):
             if _cancelled():
                 return
-            _send_progress(job_id, "enhance", (i / total) * 100 if total else 0)
+            pct = (i / total) * 70 if total else 0
+            _send_progress(job_id, f"Enhancing segment {i + 1}/{total}…", pct)
 
             seg_input = os.path.join(work_dir, f"seg_{i:04d}_raw.wav")
             seg_output = os.path.join(work_dir, f"seg_{i:04d}_enh.wav")
@@ -174,23 +176,23 @@ def _handle_export(payload: dict[str, Any]) -> None:
             pipeline.process(seg_input, seg_output, config.enhancement_strength)
             enhanced_paths.append({"path": seg_output})
 
-        _send_progress(job_id, "enhance", 100)
+        _send_progress(job_id, "Enhancement complete", 70)
 
         if _cancelled():
             return
 
-        # 2. Assemble
-        _send_progress(job_id, "assembly", 0)
+        # 2. Assemble (70–90%)
+        _send_progress(job_id, "Assembling segments…", 72)
         assembled = assemble_segments(enhanced_paths, work_dir, crossfade_ms=config.crossfade_ms)
-        _send_progress(job_id, "assembly", 100)
+        _send_progress(job_id, "Assembly complete", 90)
 
         if _cancelled():
             return
 
-        # 3. Export
-        _send_progress(job_id, "export", 0)
+        # 3. Export (90–100%)
+        _send_progress(job_id, "Encoding final output…", 92)
         final = export_final(assembled, output_path, fmt=config.output_format)
-        _send_progress(job_id, "export", 100)
+        _send_progress(job_id, "Export complete", 100)
 
         _send({
             "type": "exportResult",

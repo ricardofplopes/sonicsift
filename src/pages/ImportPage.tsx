@@ -99,20 +99,24 @@ export default function ImportPage() {
   }, []);
 
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-6 p-8 animate-fade-in">
-      <Logo size="lg" />
-      <p className="text-sm text-gray-500 -mt-4 tracking-widest uppercase">
-        Process · Clean · Export
-      </p>
-      <p className="text-gray-400 text-center max-w-md">
-        Drop a large audio file (podcast, lecture, interview) to get started.
-        SonicSift will detect silence and let you review before exporting.
-      </p>
+    <div className="flex flex-col items-center justify-center h-full gap-4 p-6 overflow-y-auto animate-fade-in">
+      <Logo size={audioFile ? "md" : "lg"} />
+      {!audioFile && (
+        <>
+          <p className="text-sm text-gray-500 -mt-3 tracking-widest uppercase">
+            Process · Clean · Export
+          </p>
+          <p className="text-gray-400 text-center max-w-md">
+            Drop a large audio file (podcast, lecture, interview) to get started.
+            SonicSift will detect silence and let you review before exporting.
+          </p>
+        </>
+      )}
 
       {/* Drop zone */}
       <div
         className={`
-          relative w-full max-w-lg h-56 rounded-xl border-2 border-dashed overflow-hidden
+          relative w-full max-w-lg h-44 rounded-xl border-2 border-dashed overflow-hidden
           flex flex-col items-center justify-center gap-3 cursor-pointer
           transition-all duration-300
           ${

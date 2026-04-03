@@ -57,37 +57,33 @@ export default function ReviewPage() {
         />
       </div>
 
-      {/* Bulk actions - segmented toggle */}
-      <div className="flex gap-0.5 bg-gray-800 p-1 rounded-lg">
+      {/* Bulk actions */}
+      <div className="flex gap-3">
         <button
           onClick={handleKeepAll}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 border ${
             allKept
-              ? "bg-emerald-600 text-white shadow-sm"
-              : "text-gray-400 hover:text-gray-200 hover:bg-gray-700/50"
+              ? "bg-emerald-600/20 border-emerald-500 text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+              : "border-gray-700 text-gray-400 hover:border-emerald-600/50 hover:text-emerald-400 hover:bg-emerald-600/5"
           }`}
         >
-          <span className="flex items-center gap-2">
-            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 10.5l4 4L16 6" />
-            </svg>
-            Keep All
-          </span>
+          <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 10.5l4 4L16 6" />
+          </svg>
+          Keep All
         </button>
         <button
           onClick={handleDiscardAllSilence}
-          className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 border ${
             allSilenceDiscarded
-              ? "bg-red-600 text-white shadow-sm"
-              : "text-gray-400 hover:text-gray-200 hover:bg-gray-700/50"
+              ? "bg-red-600/20 border-red-500 text-red-400 shadow-[0_0_12px_rgba(239,68,68,0.15)]"
+              : "border-gray-700 text-gray-400 hover:border-red-600/50 hover:text-red-400 hover:bg-red-600/5"
           }`}
         >
-          <span className="flex items-center gap-2">
-            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 4l8 12M14 4L6 16" />
-            </svg>
-            Discard All Silence
-          </span>
+          <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 4l8 12M14 4L6 16" />
+          </svg>
+          Discard All Silence
         </button>
       </div>
 

@@ -1,6 +1,7 @@
-use std::io::Write;
+use std::io::{BufRead, Read, Write};
 use std::process::{Command as StdCommand, Stdio};
 
+use tauri::Emitter;
 use tauri::Manager;
 
 #[cfg(target_os = "windows")]
@@ -113,25 +114,51 @@ async fn run_python(app: tauri::AppHandle, command_json: String) -> Result<Strin
             .map_err(|e| format!("Failed to write to Python stdin: {e}"))?;
     }
 
-    let output = child
-        .wait_with_output()
-        .map_err(|e| format!("Failed to wait for Python process: {e}"))?;
+    // Take stdout and stderr handles before reading so we can stream stdout
+    // line-by-line and still capture stderr after the process exits.
+    let child_stdout = child.stdout.take();
+    let child_stderr = child.stderr.take();
 
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    // Read stdout line by line and emit events for real-time progress
+    let mut all_output = String::new();
+    if let Some(stdout) = child_stdout {
+        let reader = std::io::BufReader::new(stdout);
+        for line_result in reader.lines() {
+            match line_result {
+                Ok(line) => {
+                    let _ = app.emit("python-output", &line);
+                    all_output.push_str(&line);
+                    all_output.push('\n');
+                }
+                Err(e) => {
+                    eprintln!("[Python stdout read error]: {e}");
+                    break;
+                }
+            }
+        }
+    }
+
+    let mut stderr = String::new();
+    if let Some(mut err_stream) = child_stderr {
+        let _ = err_stream.read_to_string(&mut stderr);
+    }
+
+    let status = child
+        .wait()
+        .map_err(|e| format!("Failed to wait for Python process: {e}"))?;
 
     if !stderr.is_empty() {
         eprintln!("[Python stderr]: {stderr}");
     }
 
-    if !output.status.success() {
+    if !status.success() {
         return Err(format!(
-            "Python process exited with code {:?}.\nStderr: {stderr}\nStdout: {stdout}",
-            output.status.code(),
+            "Python process exited with code {:?}.\nStderr: {stderr}\nStdout: {all_output}",
+            status.code(),
         ));
     }
 
-    Ok(stdout)
+    Ok(all_output)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

@@ -18,9 +18,9 @@ export default function ExportPage() {
   const handleChooseOutput = async () => {
     try {
       const selected = await save({
-        defaultPath: "processed_output.wav",
+        defaultPath: `processed_output.${settings.outputFormat}`,
         filters: [
-          { name: "Audio", extensions: ["wav", "mp3", "flac"] },
+          { name: "Audio", extensions: [settings.outputFormat] },
         ],
       });
       if (selected) setOutputPath(selected);
@@ -34,6 +34,15 @@ export default function ExportPage() {
 
     startExport();
 
+    // Ensure output path has correct extension
+    let finalOutputPath = outputPath;
+    const fmt = settings.outputFormat;
+    const ext = outputPath.split('.').pop()?.toLowerCase();
+    if (ext !== fmt) {
+      finalOutputPath = outputPath.replace(/\.[^.]+$/, `.${fmt}`);
+      if (!finalOutputPath.includes('.')) finalOutputPath += `.${fmt}`;
+    }
+
     const keptSegments = segments
       .filter((s) => s.keep)
       .map((s) => ({ start: s.start, end: s.end }));
@@ -41,9 +50,9 @@ export default function ExportPage() {
     try {
       await sendCommand("export", {
         inputPath: audioFile.path,
-        outputPath,
+        outputPath: finalOutputPath,
         segments: keptSegments,
-        format: settings.outputFormat,
+        format: fmt,
         enhancementStrength: settings.enhancementStrength,
       });
     } catch (err) {

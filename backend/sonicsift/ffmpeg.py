@@ -4,11 +4,63 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
 log = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Executable resolution
+# ---------------------------------------------------------------------------
+
+def _find_executable(name: str) -> str:
+    """Find the full path to *name*, searching PATH and common Windows locations."""
+    path = shutil.which(name)
+    if path:
+        return path
+
+    home = os.environ.get("USERPROFILE", "")
+    search_dirs: list[str] = [
+        os.path.join(home, "AppData", "Local", "Microsoft", "WinGet", "Links"),
+        r"C:\ProgramData\chocolatey\bin",
+        os.path.join(home, "scoop", "shims"),
+    ]
+
+    # Search WinGet packages (deep paths where the actual binary lives)
+    winget_packages = os.path.join(
+        home, "AppData", "Local", "Microsoft", "WinGet", "Packages",
+    )
+    if os.path.isdir(winget_packages):
+        for pkg_dir in os.listdir(winget_packages):
+            if "ffmpeg" in pkg_dir.lower():
+                pkg_path = os.path.join(winget_packages, pkg_dir)
+                for root, _dirs, files in os.walk(pkg_path):
+                    if (name + ".exe") in files or name in files:
+                        search_dirs.append(root)
+                        break
+
+    exe_name = name + ".exe" if os.name == "nt" else name
+    for d in search_dirs:
+        candidate = os.path.join(d, exe_name)
+        if os.path.isfile(candidate):
+            return candidate
+        # Also check bare name (e.g. on non-Windows)
+        bare = os.path.join(d, name)
+        if bare != candidate and os.path.isfile(bare):
+            return bare
+
+    return name  # fall back to bare name; will fail with a clear error later
+
+
+FFMPEG = _find_executable("ffmpeg")
+FFPROBE = _find_executable("ffprobe")
+
+log.info("FFmpeg resolved to: %s", FFMPEG)
+log.info("FFprobe resolved to: %s", FFPROBE)
 
 
 # ---------------------------------------------------------------------------
@@ -21,6 +73,12 @@ def _run_ffmpeg(args: list[str]) -> subprocess.CompletedProcess[str]:
     Raises ``RuntimeError`` on non-zero exit codes or if the executable
     is not found.
     """
+    # Replace bare executable names with resolved full paths
+    if args and args[0] in ("ffmpeg", "ffmpeg.exe"):
+        args = [FFMPEG, *args[1:]]
+    elif args and args[0] in ("ffprobe", "ffprobe.exe"):
+        args = [FFPROBE, *args[1:]]
+
     log.debug("Running: %s", " ".join(args))
     try:
         result = subprocess.run(
@@ -54,7 +112,7 @@ def get_ffprobe_info(file_path: str) -> dict:
     ``codec``, and ``bit_rate``.
     """
     args = [
-        "ffprobe",
+        FFPROBE,
         "-v", "quiet",
         "-print_format", "json",
         "-show_format",
@@ -93,17 +151,18 @@ def detect_silence(
     Each element is ``{"start": float, "end": float, "duration": float}``.
     """
     args = [
-        "ffmpeg",
+        FFMPEG,
         "-i", file_path,
         "-af", f"silencedetect=noise={threshold_db}dB:d={min_duration}",
         "-f", "null",
         "-",
     ]
+    log.debug("Running: %s", " ".join(args))
     try:
         result = subprocess.run(args, capture_output=True, text=True)
     except FileNotFoundError:
         raise RuntimeError(
-            "'ffmpeg' not found. Please install FFmpeg and ensure it is on your PATH. "
+            f"'{FFMPEG}' not found. Please install FFmpeg and ensure it is on your PATH. "
             "Download from https://ffmpeg.org/download.html"
         ) from None
     if result.returncode != 0:
