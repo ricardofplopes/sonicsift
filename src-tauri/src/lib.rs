@@ -79,9 +79,27 @@ async fn run_python(app: tauri::AppHandle, command_json: String) -> Result<Strin
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
+    // Ensure the spawned Python process inherits a complete PATH that
+    // includes common tool locations (e.g. FFmpeg installed via winget).
     #[cfg(target_os = "windows")]
     {
-        // CREATE_NO_WINDOW – prevents a console window from flashing
+        use std::env;
+        if let Ok(sys_path) = env::var("PATH") {
+            // Also check well-known winget/scoop/chocolatey locations
+            let mut paths = sys_path;
+            let home = env::var("USERPROFILE").unwrap_or_default();
+            let extra_dirs = [
+                format!(r"{home}\AppData\Local\Microsoft\WinGet\Links"),
+                format!(r"{home}\scoop\shims"),
+                r"C:\ProgramData\chocolatey\bin".to_string(),
+            ];
+            for d in &extra_dirs {
+                if !paths.contains(d.as_str()) && std::path::Path::new(d).exists() {
+                    paths = format!("{paths};{d}");
+                }
+            }
+            cmd.env("PATH", &paths);
+        }
         cmd.creation_flags(0x0800_0000);
     }
 

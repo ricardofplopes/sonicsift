@@ -18,14 +18,22 @@ log = logging.getLogger(__name__)
 def _run_ffmpeg(args: list[str]) -> subprocess.CompletedProcess[str]:
     """Execute an FFmpeg/FFprobe command and return the completed process.
 
-    Raises ``RuntimeError`` on non-zero exit codes.
+    Raises ``RuntimeError`` on non-zero exit codes or if the executable
+    is not found.
     """
     log.debug("Running: %s", " ".join(args))
-    result = subprocess.run(
-        args,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        exe = args[0] if args else "ffmpeg"
+        raise RuntimeError(
+            f"'{exe}' not found. Please install FFmpeg and ensure it is on your PATH. "
+            f"Download from https://ffmpeg.org/download.html"
+        ) from None
     if result.returncode != 0:
         log.error("FFmpeg stderr:\n%s", result.stderr)
         raise RuntimeError(
@@ -91,7 +99,13 @@ def detect_silence(
         "-f", "null",
         "-",
     ]
-    result = subprocess.run(args, capture_output=True, text=True)
+    try:
+        result = subprocess.run(args, capture_output=True, text=True)
+    except FileNotFoundError:
+        raise RuntimeError(
+            "'ffmpeg' not found. Please install FFmpeg and ensure it is on your PATH. "
+            "Download from https://ffmpeg.org/download.html"
+        ) from None
     if result.returncode != 0:
         log.error("FFmpeg stderr:\n%s", result.stderr)
         raise RuntimeError(
