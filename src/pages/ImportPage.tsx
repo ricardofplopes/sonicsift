@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useJobStore } from "@/stores/jobStore";
+import { useSidecar } from "@/hooks/useSidecar";
 import Logo from "@/components/Logo";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -14,8 +15,10 @@ function extractFileName(filePath: string): string {
 export default function ImportPage() {
   const navigate = useNavigate();
   const { audioFile, setAudioFile } = useJobStore();
+  const { sendCommand } = useSidecar();
   const [isDragging, setIsDragging] = useState(false);
   const [dropMessage, setDropMessage] = useState<string | null>(null);
+  const [isProbing, setIsProbing] = useState(false);
 
   const handleChooseFile = useCallback(async () => {
     try {
@@ -97,6 +100,16 @@ export default function ImportPage() {
       unlistenPromise.then((unlisten) => unlisten());
     };
   }, []);
+
+  // Probe file metadata via Python backend when a file is selected
+  useEffect(() => {
+    if (audioFile && audioFile.duration === 0 && !isProbing) {
+      setIsProbing(true);
+      sendCommand("probe", { inputPath: audioFile.path }).finally(() =>
+        setIsProbing(false),
+      );
+    }
+  }, [audioFile, sendCommand, isProbing]);
 
   return (
     <div className="flex flex-col items-center justify-center h-full gap-4 p-6 overflow-y-auto animate-fade-in">

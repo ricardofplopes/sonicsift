@@ -72,6 +72,20 @@ export function useSidecar() {
         state.setComplete(outputPath);
         break;
       }
+      case "fileInfo": {
+        const state = useJobStore.getState();
+        if (state.audioFile) {
+          state.setAudioFile({
+            ...state.audioFile,
+            duration: (payload.duration as number) || state.audioFile.duration,
+            sampleRate: (payload.sampleRate as number) || state.audioFile.sampleRate,
+            channels: (payload.channels as number) || state.audioFile.channels,
+            codec: (payload.codec as string) || state.audioFile.codec,
+            size: (payload.fileSize as number) || state.audioFile.size,
+          });
+        }
+        break;
+      }
       case "error": {
         const errorMessage =
           typeof payload.message === "string"
@@ -156,6 +170,13 @@ function buildPythonPayload(
 ): Record<string, unknown> {
   const jobId = useJobStore.getState().job.id || "";
 
+  if (type === "probe") {
+    return {
+      jobId,
+      filePath: payload.inputPath as string,
+    };
+  }
+
   if (type === "analyze") {
     return {
       jobId,
@@ -204,6 +225,18 @@ function translatePythonMessage(
         payload: {
           progress: payload.percent as number,
           phase: payload.stage as string,
+        },
+      };
+
+    case "probeResult":
+      return {
+        type: "fileInfo",
+        payload: {
+          duration: payload.duration as number,
+          sampleRate: payload.sampleRate as number,
+          channels: payload.channels as number,
+          codec: payload.codec as string,
+          fileSize: payload.fileSize as number,
         },
       };
 

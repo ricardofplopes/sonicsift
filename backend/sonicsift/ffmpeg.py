@@ -87,11 +87,25 @@ def _run_ffmpeg(args: list[str]) -> subprocess.CompletedProcess[str]:
             text=True,
         )
     except FileNotFoundError:
-        exe = args[0] if args else "ffmpeg"
-        raise RuntimeError(
-            f"'{exe}' not found. Please install FFmpeg and ensure it is on your PATH. "
-            f"Download from https://ffmpeg.org/download.html"
-        ) from None
+        # Re-resolve and retry once — the original path may have become
+        # invalid (e.g. WinGet package updated).
+        exe_name = Path(args[0]).stem
+        fallback = _find_executable(exe_name)
+        if fallback != args[0]:
+            log.warning("Retrying with re-resolved path: %s", fallback)
+            args = [fallback, *args[1:]]
+            try:
+                result = subprocess.run(args, capture_output=True, text=True)
+            except FileNotFoundError:
+                raise RuntimeError(
+                    f"'{fallback}' not found. Please install FFmpeg and ensure it is on your PATH. "
+                    f"Download from https://ffmpeg.org/download.html"
+                ) from None
+        else:
+            raise RuntimeError(
+                f"'{args[0]}' not found. Please install FFmpeg and ensure it is on your PATH. "
+                f"Download from https://ffmpeg.org/download.html"
+            ) from None
     if result.returncode != 0:
         log.error("FFmpeg stderr:\n%s", result.stderr)
         raise RuntimeError(
@@ -258,11 +272,11 @@ def concat_segments(
     output_path: str,
     crossfade_ms: int = 50,
 ) -> None:
-    """Concatenate multiple audio files with a crossfade.
+    """Concatenate multiple audio files.
 
-    Uses the ``acrossfade`` filter when there are exactly two inputs and falls
-    back to the concat demuxer for longer lists (crossfade applied pairwise
-    via a filter chain).
+    For small numbers of segments (≤ 20), uses the ``acrossfade`` filter for
+    smooth transitions.  For larger counts, uses the concat demuxer with a
+    list file to avoid exceeding the Windows command-line length limit.
     """
     if not segment_paths:
         raise ValueError("segment_paths must not be empty")
@@ -270,6 +284,12 @@ def concat_segments(
     if len(segment_paths) == 1:
         # Nothing to concatenate – just copy.
         _run_ffmpeg(["ffmpeg", "-y", "-i", segment_paths[0], "-c", "copy", output_path])
+        return
+
+    if len(segment_paths) > 20:
+        # Use the concat demuxer with a list file (avoids command-line
+        # length limits on Windows and FFmpeg filter graph complexity).
+        _concat_via_listfile(segment_paths, output_path)
         return
 
     crossfade_s = crossfade_ms / 1000.0
@@ -301,6 +321,38 @@ def concat_segments(
         output_path,
     ])
     log.info("Concatenated %d segments → %s", n, output_path)
+
+
+def _concat_via_listfile(segment_paths: list[str], output_path: str) -> None:
+    """Concatenate segments using the FFmpeg concat demuxer (list file).
+
+    This avoids Windows' ~32 767-char command-line limit and FFmpeg
+    filter-graph complexity limits for very large segment counts.
+    """
+    import tempfile
+
+    out_dir = os.path.dirname(output_path) or "."
+    list_fd, list_path = tempfile.mkstemp(suffix=".txt", prefix="concat_", dir=out_dir)
+    try:
+        with os.fdopen(list_fd, "w", encoding="utf-8") as f:
+            for p in segment_paths:
+                safe = p.replace("\\", "/").replace("'", "'\\''")
+                f.write(f"file '{safe}'\n")
+
+        _run_ffmpeg([
+            "ffmpeg", "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", list_path,
+            "-c", "copy",
+            output_path,
+        ])
+        log.info("Concatenated %d segments (list file) → %s", len(segment_paths), output_path)
+    finally:
+        try:
+            os.remove(list_path)
+        except OSError:
+            pass
 
 
 def encode_output(input_path: str, output_path: str, fmt: str) -> None:

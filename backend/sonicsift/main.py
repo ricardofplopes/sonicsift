@@ -77,6 +77,42 @@ def _handle_cancel() -> None:
     _send({"type": "cancelled", "payload": {}})
 
 
+def _handle_probe(payload: dict[str, Any]) -> None:
+    """Return file metadata via ffprobe without running full analysis."""
+    job_id: str = payload.get("jobId", "")
+    file_path: str = payload.get("filePath", "")
+
+    if not file_path:
+        _send_error(job_id, "Missing required field: filePath")
+        return
+
+    try:
+        from sonicsift.ffmpeg import get_ffprobe_info
+
+        metadata = get_ffprobe_info(file_path)
+    except Exception as exc:
+        _send_error(job_id, f"Failed to probe file: {exc}")
+        return
+
+    try:
+        file_size = os.path.getsize(file_path)
+    except OSError:
+        file_size = 0
+
+    _send({
+        "type": "probeResult",
+        "payload": {
+            "jobId": job_id,
+            "duration": metadata.get("duration", 0),
+            "sampleRate": metadata.get("sample_rate", 0),
+            "channels": metadata.get("channels", 0),
+            "codec": metadata.get("codec", "unknown"),
+            "bitRate": metadata.get("bit_rate", 0),
+            "fileSize": file_size,
+        },
+    })
+
+
 def _handle_analyze(payload: dict[str, Any]) -> None:
     """Ingest → chunk → detect, returning the full segment list."""
     job_id: str = payload.get("jobId", "")
@@ -213,6 +249,7 @@ def _handle_export(payload: dict[str, Any]) -> None:
 _HANDLERS: dict[str, Any] = {
     "ping": lambda _: _handle_ping(),
     "cancel": lambda _: _handle_cancel(),
+    "probe": _handle_probe,
     "analyze": _handle_analyze,
     "export": _handle_export,
 }
