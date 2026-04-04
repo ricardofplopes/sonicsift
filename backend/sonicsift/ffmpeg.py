@@ -331,13 +331,15 @@ def _concat_via_listfile(segment_paths: list[str], output_path: str) -> None:
     """
     import tempfile
 
-    out_dir = os.path.dirname(output_path) or "."
+    out_dir = os.path.dirname(os.path.abspath(output_path)) or "."
     list_fd, list_path = tempfile.mkstemp(suffix=".txt", prefix="concat_", dir=out_dir)
     try:
         with os.fdopen(list_fd, "w", encoding="utf-8") as f:
             for p in segment_paths:
-                safe = p.replace("\\", "/").replace("'", "'\\''")
-                f.write(f"file '{safe}'\n")
+                # Use absolute paths so FFmpeg resolves them correctly
+                # regardless of where the list file lives.
+                abs_p = os.path.abspath(p).replace("\\", "/").replace("'", "'\\''")
+                f.write(f"file '{abs_p}'\n")
 
         _run_ffmpeg([
             "ffmpeg", "-y",
