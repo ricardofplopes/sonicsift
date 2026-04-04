@@ -10,10 +10,17 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-MVP-blue" alt="Status"/>
-  <img src="https://img.shields.io/badge/platform-Windows%20|%20macOS%20|%20Linux-lightgrey" alt="Platform"/>
+  <img src="https://img.shields.io/badge/version-0.1.0-blue" alt="Version"/>
+  <img src="https://img.shields.io/badge/platform-Windows-lightgrey" alt="Platform"/>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License"/>
+  <img src="https://img.shields.io/github/downloads/ricardofplopes/sonicsift/total" alt="Downloads"/>
 </p>
+
+## Download
+
+> **Windows** — [SonicSift\_0.1.0\_x64-setup.exe](https://github.com/ricardofplopes/sonicsift/releases/tag/v0.1.0)
+
+Install, then make sure [Python 3.11+](https://python.org) and [FFmpeg](https://ffmpeg.org/download.html) are on your PATH before running.
 
 ## Overview
 
@@ -181,6 +188,7 @@ Default processing settings (adjustable in the UI):
 The frontend and Python worker communicate via newline-delimited JSON over stdin/stdout:
 
 **Commands (Frontend → Worker):**
+- `probe` — Fetch file metadata (duration, sample rate, codec, size)
 - `analyze` — Start analysis of an audio file
 - `export` — Export processed audio
 - `cancel` — Cancel current operation
