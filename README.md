@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.1.0-blue" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-0.2.0-blue" alt="Version"/>
   <img src="https://img.shields.io/badge/platform-Windows-lightgrey" alt="Platform"/>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License"/>
   <img src="https://img.shields.io/github/downloads/ricardofplopes/sonicsift/total" alt="Downloads"/>
@@ -18,9 +18,10 @@
 
 ## Download
 
-> **Windows** — [SonicSift\_0.1.0\_x64-setup.exe](https://github.com/ricardofplopes/sonicsift/releases/tag/v0.1.0)
+> **Windows** — [SonicSift\_0.2.0\_x64-setup.exe](https://github.com/ricardofplopes/sonicsift/releases/tag/v0.2.0)
 
-Install, then make sure [Python 3.11+](https://python.org) and [FFmpeg](https://ffmpeg.org/download.html) are on your PATH before running.
+Install, then make sure [FFmpeg](https://ffmpeg.org/download.html) is on your PATH before running.
+Python is **not** required — the audio processing backend is bundled as a frozen executable.
 
 ## Overview
 
@@ -52,6 +53,10 @@ No cloud. No uploads. Everything runs locally.
 ```
 
 ## Prerequisites
+
+> **End users** only need **FFmpeg** on PATH. Python is bundled inside the installer.
+
+For **development**, you also need:
 
 - **Node.js** >= 20
 - **pnpm** >= 9
@@ -215,7 +220,7 @@ docker compose -f docker-compose.dev.yml up --build
 - [ ] Implement audio preview/playback for segments
 - [ ] Add demucs source-separation enhancement pipeline
 - [ ] Add job persistence and resume capability
-- [ ] Package Python backend as frozen executable (PyInstaller) for standalone distribution
+- [x] Package Python backend as frozen executable (PyInstaller) for standalone distribution
 - [ ] Add automated integration tests for the full pipeline
 - [ ] Performance optimization for very large files (12+ hours)
 - [ ] macOS DMG and Linux AppImage packaging

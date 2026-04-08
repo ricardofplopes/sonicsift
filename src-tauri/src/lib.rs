@@ -15,35 +15,51 @@ fn get_app_data_dir(app: tauri::AppHandle) -> Result<String, String> {
         .map_err(|e| e.to_string())
 }
 
-/// Find the backend directory by searching multiple locations.
-fn find_backend_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+/// How the Python backend worker should be launched.
+enum WorkerMode {
+    /// Frozen PyInstaller executable – spawn it directly.
+    FrozenExe(std::path::PathBuf),
+    /// Development mode – invoke `python -m sonicsift.main` inside this dir.
+    PythonModule(std::path::PathBuf),
+}
+
+/// Locate the backend worker, preferring a frozen executable over Python.
+fn find_worker(app: &tauri::AppHandle) -> Result<WorkerMode, String> {
+    let frozen_name = if cfg!(target_os = "windows") {
+        "sonicsift-worker.exe"
+    } else {
+        "sonicsift-worker"
+    };
+
+    // --- Frozen executable search ---
+
     // 1. Resource dir (bundled app via NSIS installer)
     if let Ok(resource_dir) = app.path().resource_dir() {
-        let backend = resource_dir.join("backend");
-        if backend.join("sonicsift").exists() {
-            return Ok(backend);
+        let exe = resource_dir.join(frozen_name);
+        if exe.is_file() {
+            return Ok(WorkerMode::FrozenExe(exe));
         }
     }
 
-    // 2. Next to the executable (portable / dev build)
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(exe_dir) = exe.parent() {
-            let backend = exe_dir.join("backend");
-            if backend.join("sonicsift").exists() {
-                return Ok(backend);
+    // 2. Next to the application executable
+    if let Ok(app_exe) = std::env::current_exe() {
+        if let Some(exe_dir) = app_exe.parent() {
+            let exe = exe_dir.join(frozen_name);
+            if exe.is_file() {
+                return Ok(WorkerMode::FrozenExe(exe));
             }
         }
     }
 
-    // 2b. Walk up from exe directory (handles dev builds: src-tauri/target/release/)
-    if let Ok(exe) = std::env::current_exe() {
-        let mut dir = exe.parent().map(|p| p.to_path_buf());
+    // 2b. Walk up from exe directory (dev build with pre-built worker)
+    if let Ok(app_exe) = std::env::current_exe() {
+        let mut dir = app_exe.parent().map(|p| p.to_path_buf());
         for _ in 0..6 {
             match dir {
                 Some(ref d) => {
-                    let backend = d.join("backend");
-                    if backend.join("sonicsift").exists() {
-                        return Ok(backend);
+                    let exe = d.join("backend").join("dist").join(frozen_name);
+                    if exe.is_file() {
+                        return Ok(WorkerMode::FrozenExe(exe));
                     }
                     dir = d.parent().map(|p| p.to_path_buf());
                 }
@@ -52,60 +68,104 @@ fn find_backend_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String
         }
     }
 
-    // 3. Current working directory (development: pnpm tauri dev)
+    // 3. CWD (development with pre-built worker)
     if let Ok(cwd) = std::env::current_dir() {
-        let backend = cwd.join("backend");
-        if backend.join("sonicsift").exists() {
-            return Ok(backend);
+        let exe = cwd.join("backend").join("dist").join(frozen_name);
+        if exe.is_file() {
+            return Ok(WorkerMode::FrozenExe(exe));
         }
     }
 
-    Err(format!(
-        "Backend directory not found. Searched resource dir, exe ancestors (up to 6 levels), and CWD. \
-         Make sure the 'backend/sonicsift/' directory exists relative to the executable or project root."
-    ))
+    // --- Python module fallback (development) ---
+
+    // Walk up from exe directory
+    if let Ok(app_exe) = std::env::current_exe() {
+        let mut dir = app_exe.parent().map(|p| p.to_path_buf());
+        for _ in 0..6 {
+            match dir {
+                Some(ref d) => {
+                    let backend = d.join("backend");
+                    if backend.join("sonicsift").exists() {
+                        return Ok(WorkerMode::PythonModule(backend));
+                    }
+                    dir = d.parent().map(|p| p.to_path_buf());
+                }
+                None => break,
+            }
+        }
+    }
+
+    // CWD fallback
+    if let Ok(cwd) = std::env::current_dir() {
+        let backend = cwd.join("backend");
+        if backend.join("sonicsift").exists() {
+            return Ok(WorkerMode::PythonModule(backend));
+        }
+    }
+
+    Err(
+        "Backend worker not found. Searched for frozen executable (sonicsift-worker) \
+         in resource dir, exe ancestors, and CWD; then searched for Python module \
+         (backend/sonicsift/) in exe ancestors and CWD."
+            .to_string(),
+    )
 }
 
-/// Spawn the Python backend, send a single JSON command on stdin, and return
+/// Apply Windows-specific PATH and creation-flag tweaks to the command.
+#[cfg(target_os = "windows")]
+fn apply_windows_flags(cmd: &mut StdCommand) {
+    use std::env;
+    if let Ok(sys_path) = env::var("PATH") {
+        let mut paths = sys_path;
+        let home = env::var("USERPROFILE").unwrap_or_default();
+        let extra_dirs = [
+            format!(r"{home}\AppData\Local\Microsoft\WinGet\Links"),
+            format!(r"{home}\scoop\shims"),
+            r"C:\ProgramData\chocolatey\bin".to_string(),
+        ];
+        for d in &extra_dirs {
+            if !paths.contains(d.as_str()) && std::path::Path::new(d).exists() {
+                paths = format!("{paths};{d}");
+            }
+        }
+        cmd.env("PATH", &paths);
+    }
+    cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+}
+
+/// Spawn the backend worker, send a single JSON command on stdin, and return
 /// all of stdout once the process exits.  Each line of stdout is a
 /// newline-delimited JSON message that the frontend parses.
 #[tauri::command]
 async fn run_python(app: tauri::AppHandle, command_json: String) -> Result<String, String> {
-    let backend_dir = find_backend_dir(&app)?;
+    let worker = find_worker(&app)?;
 
-    let mut cmd = StdCommand::new("python");
-    cmd.args(["-m", "sonicsift.main"])
-        .current_dir(&backend_dir)
-        .stdin(Stdio::piped())
+    let mut cmd = match &worker {
+        WorkerMode::FrozenExe(exe_path) => {
+            StdCommand::new(exe_path)
+        }
+        WorkerMode::PythonModule(backend_dir) => {
+            let mut c = StdCommand::new("python");
+            c.args(["-m", "sonicsift.main"]);
+            c.current_dir(backend_dir);
+            c
+        }
+    };
+
+    cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    // Ensure the spawned Python process inherits a complete PATH that
-    // includes common tool locations (e.g. FFmpeg installed via winget).
     #[cfg(target_os = "windows")]
-    {
-        use std::env;
-        if let Ok(sys_path) = env::var("PATH") {
-            // Also check well-known winget/scoop/chocolatey locations
-            let mut paths = sys_path;
-            let home = env::var("USERPROFILE").unwrap_or_default();
-            let extra_dirs = [
-                format!(r"{home}\AppData\Local\Microsoft\WinGet\Links"),
-                format!(r"{home}\scoop\shims"),
-                r"C:\ProgramData\chocolatey\bin".to_string(),
-            ];
-            for d in &extra_dirs {
-                if !paths.contains(d.as_str()) && std::path::Path::new(d).exists() {
-                    paths = format!("{paths};{d}");
-                }
-            }
-            cmd.env("PATH", &paths);
-        }
-        cmd.creation_flags(0x0800_0000);
-    }
+    apply_windows_flags(&mut cmd);
+
+    let spawn_desc = match &worker {
+        WorkerMode::FrozenExe(p) => format!("frozen exe: {}", p.display()),
+        WorkerMode::PythonModule(p) => format!("python -m sonicsift.main in {}", p.display()),
+    };
 
     let mut child = cmd.spawn().map_err(|e| {
-        format!("Failed to spawn Python: {e}. Is Python installed and on PATH?")
+        format!("Failed to spawn worker ({spawn_desc}): {e}")
     })?;
 
     // Write command and drop stdin so the Python process sees EOF.

@@ -1,6 +1,6 @@
 [package]
 name = "sonicsift"
-version = "0.1.0"
+version = "0.2.0"
 description = "SonicSift - Audio Processing Desktop App"
 authors = ["SonicSift"]
 edition = "2021"
