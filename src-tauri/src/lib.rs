@@ -35,9 +35,13 @@ fn find_worker(app: &tauri::AppHandle) -> Result<WorkerMode, String> {
 
     // 1. Resource dir (bundled app via NSIS installer)
     if let Ok(resource_dir) = app.path().resource_dir() {
-        let exe = resource_dir.join(frozen_name);
-        if exe.is_file() {
-            return Ok(WorkerMode::FrozenExe(exe));
+        // Check root and bin/ subdirectory
+        for subdir in &["", "bin"] {
+            let dir = resource_dir.join(subdir);
+            let exe = dir.join(frozen_name);
+            if exe.is_file() {
+                return Ok(WorkerMode::FrozenExe(exe));
+            }
         }
     }
 

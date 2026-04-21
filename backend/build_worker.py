@@ -57,6 +57,14 @@ def main() -> None:
     print(f"  Executable: {exe_path}")
     print(f"  Size: {size_mb:.1f} MB")
 
+    # Copy to src-tauri/bin/ for Tauri resource bundling (avoids ".." path
+    # which Tauri mangles into "_up_" directories in the installer).
+    tauri_bin = backend_dir.parent / "src-tauri" / "bin"
+    tauri_bin.mkdir(parents=True, exist_ok=True)
+    dest = tauri_bin / exe_name
+    shutil.copy2(exe_path, dest)
+    print(f"  Copied to: {dest}")
+
 
 if __name__ == "__main__":
     main()

@@ -43,6 +43,7 @@ desktop.ini
 src-tauri/target/
 src-tauri/WixTools/
 src-tauri/gen/
+src-tauri/bin/
 
 # SonicSift work directories
 .sonicsift-work/

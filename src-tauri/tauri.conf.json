@@ -24,7 +24,7 @@
     "active": true,
     "targets": ["nsis"],
     "resources": [
-      "../backend/dist/sonicsift-worker.exe"
+      "bin/sonicsift-worker.exe"
     ],
     "windows": {
       "nsis": {
