@@ -20,8 +20,7 @@
 
 > **Windows** — [SonicSift\_0.2.0\_x64-setup.exe](https://github.com/ricardofplopes/sonicsift/releases/tag/v0.2.0)
 
-Install, then make sure [FFmpeg](https://ffmpeg.org/download.html) is on your PATH before running.
-Python is **not** required — the audio processing backend is bundled as a frozen executable.
+The installer will detect if [FFmpeg](https://ffmpeg.org/download.html) is missing and offer to install it automatically via `winget`. No manual setup required.
 
 ## Overview
 
@@ -54,7 +53,8 @@ No cloud. No uploads. Everything runs locally.
 
 ## Prerequisites
 
-> **End users** only need **FFmpeg** on PATH. Python is bundled inside the installer.
+> **End users** don't need to install anything manually — the installer handles FFmpeg setup.
+> If automatic install fails, install [FFmpeg](https://ffmpeg.org/download.html) manually and ensure it's on PATH.
 
 For **development**, you also need:
 
