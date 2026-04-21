@@ -12,8 +12,34 @@
     Goto ffmpeg_done
   ${EndIf}
 
-  DetailPrint "FFmpeg not found on PATH."
+  DetailPrint "FFmpeg not found on PATH. Checking common install locations..."
 
+  ; --- Check common install locations (mirrors Python backend's search logic) ---
+  ; WinGet Links
+  IfFileExists "$PROFILE\AppData\Local\Microsoft\WinGet\Links\ffmpeg.exe" ffmpeg_found_offpath 0
+  ; Chocolatey
+  IfFileExists "C:\ProgramData\chocolatey\bin\ffmpeg.exe" ffmpeg_found_offpath 0
+  ; Scoop
+  IfFileExists "$PROFILE\scoop\shims\ffmpeg.exe" ffmpeg_found_offpath 0
+  ; Common manual install locations
+  IfFileExists "C:\ffmpeg\bin\ffmpeg.exe" ffmpeg_found_offpath 0
+  IfFileExists "C:\Program Files\ffmpeg\bin\ffmpeg.exe" ffmpeg_found_offpath 0
+
+  ; Also check WinGet Packages folder (deep path where binary actually lives)
+  IfFileExists "$PROFILE\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg*\*\bin\ffmpeg.exe" ffmpeg_found_offpath 0
+
+  ; Not found anywhere — proceed to install
+  Goto ffmpeg_not_found
+
+ffmpeg_found_offpath:
+  DetailPrint "FFmpeg is installed but not on PATH. SonicSift will detect it automatically."
+  IfSilent ffmpeg_done 0
+  MessageBox MB_OK|MB_ICONINFORMATION \
+    "FFmpeg is installed on your system but not on PATH.$\r$\n$\r$\n\
+SonicSift will detect it automatically — no action needed."
+  Goto ffmpeg_done
+
+ffmpeg_not_found:
   ; --- Silent mode: attempt auto-install, no prompts ---
   IfSilent 0 +3
     DetailPrint "Silent mode: attempting automatic FFmpeg install via winget..."
