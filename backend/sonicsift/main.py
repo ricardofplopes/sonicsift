@@ -203,6 +203,15 @@ def _handle_export(payload: dict[str, Any]) -> None:
             pct = (i / total) * 70 if total else 0
             _send_progress(job_id, f"Enhancing segment {i + 1}/{total}…", pct)
 
+            # Skip invalid segments (end <= start) which can occur when
+            # duration was estimated inaccurately during analysis.
+            if seg["end"] <= seg["start"]:
+                log.warning(
+                    "Skipping segment %d: start=%.3f >= end=%.3f",
+                    i, seg["start"], seg["end"],
+                )
+                continue
+
             seg_input = os.path.join(work_dir, f"seg_{i:04d}_raw.wav")
             seg_output = os.path.join(work_dir, f"seg_{i:04d}_enh.wav")
             intermediate_files.extend([seg_input, seg_output])
