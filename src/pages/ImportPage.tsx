@@ -216,14 +216,24 @@ export default function ImportPage() {
           <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
             Selected File
           </h3>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <InfoRow label="Name" value={audioFile.name} />
-            <InfoRow label="Format" value={audioFile.codec} />
-            <InfoRow label="Duration" value={formatDuration(audioFile.duration)} />
-            <InfoRow label="Size" value={formatFileSize(audioFile.size)} />
-            <InfoRow label="Sample Rate" value={`${audioFile.sampleRate} Hz`} />
-            <InfoRow label="Channels" value={audioFile.channels === 1 ? "Mono" : "Stereo"} />
-          </div>
+          {isProbing ? (
+            <div className="flex items-center gap-3 py-4 justify-center">
+              <svg className="w-5 h-5 text-sonic-400 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                <path d="M12 2a10 10 0 019.95 9" strokeLinecap="round" />
+              </svg>
+              <span className="text-gray-400 text-sm">Reading file info…</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <InfoRow label="Name" value={audioFile.name} />
+              <InfoRow label="Format" value={audioFile.codec} />
+              <InfoRow label="Duration" value={formatDuration(audioFile.duration)} />
+              <InfoRow label="Size" value={formatFileSize(audioFile.size)} />
+              <InfoRow label="Sample Rate" value={`${audioFile.sampleRate} Hz`} />
+              <InfoRow label="Channels" value={audioFile.channels === 1 ? "Mono" : "Stereo"} />
+            </div>
+          )}
         </div>
       )}
 

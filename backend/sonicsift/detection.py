@@ -47,6 +47,18 @@ def detect_segments(
         min_duration=config.min_silence_duration,
     )
 
+    # For files where ffprobe estimates duration from bitrate (e.g. raw AAC),
+    # silencedetect may report timestamps beyond the probe estimate. Use the
+    # actual maximum timestamp so that segments aren't incorrectly clamped.
+    if silence_regions:
+        actual_end = max(r["end"] for r in silence_regions)
+        if actual_end > total_duration:
+            log.info(
+                "Adjusting total_duration from %.2f to %.2f (silencedetect ran longer)",
+                total_duration, actual_end,
+            )
+            total_duration = actual_end
+
     segments: list[Segment] = []
     cursor = 0.0
 
@@ -124,6 +136,10 @@ def apply_padding(
         if seg.segment_type == "speech":
             new_start = max(seg.start - padding_s, 0.0)
             new_end = min(seg.end + padding_s, total_duration) if total_duration > 0 else seg.end + padding_s
+            # Discard degenerate segments (can happen when total_duration is
+            # underestimated relative to actual timestamps)
+            if new_end <= new_start:
+                continue
             speech_intervals.append(
                 Segment(
                     start=new_start,

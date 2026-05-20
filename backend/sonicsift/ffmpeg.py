@@ -233,6 +233,11 @@ def extract_segment(
     the input codec.
     """
     duration = end - start
+    if duration <= 0:
+        raise ValueError(
+            f"Invalid segment: start={start:.3f} >= end={end:.3f} "
+            f"(duration={duration:.3f}). Segment would be empty or negative."
+        )
     _run_ffmpeg([
         "ffmpeg", "-y",
         "-ss", str(start),

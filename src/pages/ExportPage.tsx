@@ -16,9 +16,16 @@ export default function ExportPage() {
   );
 
   const handleChooseOutput = async () => {
+    // Default to input filename with new extension
+    let defaultName = `processed_output.${settings.outputFormat}`;
+    if (audioFile?.name) {
+      const baseName = audioFile.name.replace(/\.[^.]+$/, "");
+      defaultName = `${baseName}.${settings.outputFormat}`;
+    }
+
     try {
       const selected = await save({
-        defaultPath: `processed_output.${settings.outputFormat}`,
+        defaultPath: defaultName,
         filters: [
           { name: "Audio", extensions: [settings.outputFormat] },
         ],
