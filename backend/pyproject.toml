@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sonicsift"
-version = "0.2.0"
+version = "0.3.0"
 description = "Audio processing worker for SonicSift – silence detection, speech enhancement, and audio export."
 requires-python = ">= 3.11"
 dependencies = [

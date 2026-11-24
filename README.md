@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.2.0-blue" alt="Version"/>
+  <img src="https://img.shields.io/badge/version-0.3.0-blue" alt="Version"/>
   <img src="https://img.shields.io/badge/platform-Windows-lightgrey" alt="Platform"/>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License"/>
   <img src="https://img.shields.io/github/downloads/ricardofplopes/sonicsift/total" alt="Downloads"/>
@@ -18,7 +18,7 @@
 
 ## Download
 
-> **Windows** — [SonicSift\_0.2.0\_x64-setup.exe](https://github.com/ricardofplopes/sonicsift/releases/tag/v0.2.0)
+> **Windows** — [SonicSift\_0.3.0\_x64-setup.exe](https://github.com/ricardofplopes/sonicsift/releases/tag/v0.3.0)
 
 The installer will detect if [FFmpeg](https://ffmpeg.org/download.html) is missing and offer to install it automatically via `winget`. No manual setup required.
 

@@ -177,7 +177,7 @@ export default function Sidebar() {
       </nav>
 
       <div className="px-5 mt-auto pt-4 border-t border-gray-800">
-        <p className="text-xs text-gray-600">v0.1.0</p>
+        <p className="text-xs text-gray-600">v{__APP_VERSION__}</p>
       </div>
     </aside>
   );
