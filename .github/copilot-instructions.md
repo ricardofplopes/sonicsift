@@ -6,6 +6,7 @@
 # Frontend (React + Vite)
 pnpm build                    # TypeScript check + Vite production build
 pnpm dev                      # Dev server at http://localhost:1420
+pnpm test                     # Vitest unit tests (src/**/*.test.ts)
 
 # Full desktop app (Tauri + frontend + Rust)
 pnpm tauri dev                # Development mode with hot reload
@@ -88,6 +89,8 @@ Async logic lives in hooks/components, not in stores.
 - **Icons**: Inline SVG elements in JSX. No icon library, no emojis. Use `viewBox="0 0 20 20"`, `fill="none"`, `stroke="currentColor"`, `strokeWidth="1.5"`.
 - **Path alias**: `@/*` maps to `src/*` (configured in both tsconfig.json and vite.config.ts).
 - **Component pattern**: Pages in `src/pages/`, reusable components in `src/components/`. Sidebar steps define a `canNavigate()` function controlling the workflow progression.
+- **Pure logic**: Framework-free helpers live in `src/lib/` with colocated Vitest tests (`*.test.ts`, import `describe/it/expect` from `vitest` explicitly). Example: `timeRange.ts` owns crop/time parsing and builds the export ranges.
+- **Crop range**: `jobStore.cropRange` (`null` = whole file) is set on the Review step. The frontend sends only kept, clipped, merged ranges via `buildExportRanges()`. The Python export command is unaware of cropping.
 
 ### Python backend
 

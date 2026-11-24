@@ -1,23 +1,100 @@
-import { useState, useRef } from "react";
-import type { Segment } from "@/types";
+import { memo, useState, useRef } from "react";
+import type { KeyboardEvent, PointerEvent, RefObject } from "react";
+import type { Segment, TimeRange } from "@/types";
+import { formatTimecode, moveRangeEdge } from "@/lib/timeRange";
+
+type CropEdge = "start" | "end";
+
+interface HoverInfo {
+  index: number;
+  left: number;
+  top: number;
+}
 
 interface SegmentTimelineProps {
   segments: Segment[];
   totalDuration: number;
   onToggle: (index: number) => void;
+  /** Current crop; `null` means the whole file. */
+  cropRange?: TimeRange | null;
+  /** When provided, draggable crop handles are shown on the timeline. */
+  onCropChange?: (range: TimeRange) => void;
 }
 
 export default function SegmentTimeline({
   segments,
   totalDuration,
   onToggle,
+  cropRange = null,
+  onCropChange,
 }: SegmentTimelineProps) {
-  const [hovered, setHovered] = useState<{ index: number; left: number; top: number } | null>(null);
+  const [hovered, setHovered] = useState<HoverInfo | null>(null);
+  const [dragging, setDragging] = useState<CropEdge | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const trackRef = useRef<HTMLDivElement>(null);
 
   if (totalDuration === 0) return null;
 
   const hoveredSeg = hovered !== null ? segments[hovered.index] : null;
+  const range = cropRange ?? { start: 0, end: totalDuration };
+  const startPct = (range.start / totalDuration) * 100;
+  const endPct = (range.end / totalDuration) * 100;
+
+  const handlePointerDown = (e: PointerEvent<HTMLDivElement>, edge: CropEdge) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    e.currentTarget.focus();
+    setHovered(null);
+    setDragging(edge);
+  };
+
+  const updateEdge = (edge: CropEdge, time: number) => {
+    if (!onCropChange) return;
+    const next = moveRangeEdge(range, edge, time, totalDuration);
+    if (next.start !== range.start || next.end !== range.end) {
+      onCropChange(next);
+    }
+  };
+
+  const handlePointerMove = (e: PointerEvent<HTMLDivElement>, edge: CropEdge) => {
+    if (dragging !== edge || !trackRef.current) return;
+    const rect = trackRef.current.getBoundingClientRect();
+    updateEdge(edge, ((e.clientX - rect.left) / rect.width) * totalDuration);
+  };
+
+  const handlePointerUp = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    setDragging(null);
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>, edge: CropEdge) => {
+    const step = e.shiftKey ? 60 : 1;
+    const current = range[edge];
+    let time: number;
+    switch (e.key) {
+      case "ArrowLeft":
+      case "ArrowDown":
+        time = current - step;
+        break;
+      case "ArrowRight":
+      case "ArrowUp":
+        time = current + step;
+        break;
+      case "Home":
+        time = 0;
+        break;
+      case "End":
+        time = totalDuration;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    updateEdge(edge, time);
+  };
 
   return (
     <div className="w-full relative" ref={containerRef}>
@@ -30,92 +107,79 @@ export default function SegmentTimeline({
         <span>{formatDuration(totalDuration)}</span>
       </div>
 
-      {/* Waveform visualization */}
-      <div className="flex w-full h-16 items-end rounded-t-lg overflow-hidden border border-b-0 border-gray-700 bg-gray-900/80">
-        {segments.map((seg, i) => {
-          const widthPercent = (seg.duration / totalDuration) * 100;
-          const barCount = Math.max(2, Math.round(widthPercent * 0.8));
-          const isSpeech = seg.segmentType === "speech";
-          const opacity = seg.keep ? 1 : 0.25;
+      {/* Track: waveform + timeline bar, with crop overlay and handles on top */}
+      <div className="relative" ref={trackRef}>
+        <SegmentTrack
+          segments={segments}
+          totalDuration={totalDuration}
+          onToggle={onToggle}
+          onHover={setHovered}
+          containerRef={containerRef}
+        />
 
-          return (
+        {onCropChange && (
+          <>
+            {/* Dim everything outside the crop range (clicks pass through) */}
             <div
-              key={`wf-${i}`}
-              className="h-full flex items-end gap-px cursor-pointer"
-              style={{ width: `${widthPercent}%`, opacity }}
-              onClick={() => onToggle(i)}
-              onMouseEnter={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const cRect = containerRef.current?.getBoundingClientRect();
-                if (cRect) {
-                  setHovered({
-                    index: i,
-                    left: rect.left - cRect.left + rect.width / 2,
-                    top: rect.top - cRect.top,
-                  });
-                }
-              }}
-              onMouseLeave={() => setHovered(null)}
-            >
-              {Array.from({ length: barCount }, (_, j) => {
-                const seed = (i * 127 + j * 31) % 100;
-                const baseHeight = isSpeech ? 30 + seed * 0.6 : 5 + seed * 0.12;
-                const height = Math.min(95, Math.max(4, baseHeight));
-                const color = isSpeech
-                  ? seg.keep ? "bg-emerald-500" : "bg-red-500"
-                  : seg.keep ? "bg-emerald-800" : "bg-red-900";
-
-                return (
-                  <div
-                    key={j}
-                    className={`flex-1 min-w-[1px] rounded-t-sm ${color} transition-all duration-200`}
-                    style={{ height: `${height}%` }}
-                  />
-                );
-              })}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Timeline bar */}
-      <div className="flex w-full h-10 rounded-b-lg overflow-hidden border border-t-0 border-gray-700 bg-gray-900">
-        {segments.map((seg, i) => {
-          const widthPercent = (seg.duration / totalDuration) * 100;
-          const isSpeech = seg.segmentType === "speech";
-
-          let bgColor: string;
-          if (seg.keep) {
-            bgColor = isSpeech
-              ? "bg-emerald-600 hover:bg-emerald-500"
-              : "bg-emerald-800 hover:bg-emerald-700";
-          } else {
-            bgColor = isSpeech
-              ? "bg-red-800 hover:bg-red-700"
-              : "bg-red-900/60 hover:bg-red-800/60";
-          }
-
-          return (
-            <button
-              key={i}
-              onClick={() => onToggle(i)}
-              onMouseEnter={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const cRect = containerRef.current?.getBoundingClientRect();
-                if (cRect) {
-                  setHovered({
-                    index: i,
-                    left: rect.left - cRect.left + rect.width / 2,
-                    top: rect.top - cRect.top,
-                  });
-                }
-              }}
-              onMouseLeave={() => setHovered(null)}
-              className={`h-full cursor-pointer border-r border-gray-800 last:border-r-0 transition-all duration-200 hover:brightness-110 hover:shadow-[0_0_12px_rgba(255,255,255,0.1)] hover:z-10 ${bgColor}`}
-              style={{ width: `${widthPercent}%`, minWidth: widthPercent > 0.5 ? "2px" : "1px" }}
+              className="absolute inset-y-0 left-0 bg-gray-950/70 pointer-events-none rounded-l-lg"
+              style={{ width: `${startPct}%` }}
             />
-          );
-        })}
+            <div
+              className="absolute inset-y-0 right-0 bg-gray-950/70 pointer-events-none rounded-r-lg"
+              style={{ width: `${100 - endPct}%` }}
+            />
+
+            {(["start", "end"] as const).map((edge) => {
+              const value = range[edge];
+              const pct = edge === "start" ? startPct : endPct;
+              return (
+                <div
+                  key={edge}
+                  role="slider"
+                  tabIndex={0}
+                  aria-label={edge === "start" ? "Crop start" : "Crop end"}
+                  aria-valuemin={0}
+                  aria-valuemax={Math.round(totalDuration)}
+                  aria-valuenow={Math.round(value)}
+                  aria-valuetext={formatTimecode(value)}
+                  className="group absolute inset-y-0 z-20 w-3 -translate-x-1/2 flex justify-center cursor-ew-resize touch-none outline-none"
+                  style={{ left: `${pct}%` }}
+                  onPointerDown={(e) => handlePointerDown(e, edge)}
+                  onPointerMove={(e) => handlePointerMove(e, edge)}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerUp}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => handleKeyDown(e, edge)}
+                >
+                  <div
+                    className={`w-0.5 h-full transition-colors ${
+                      dragging === edge
+                        ? "bg-sonic-300"
+                        : "bg-sonic-400 group-hover:bg-sonic-300 group-focus-visible:bg-sonic-300"
+                    }`}
+                  />
+                  <div
+                    className={`absolute top-1/2 -translate-y-1/2 w-3 h-6 rounded-sm border flex items-center justify-center gap-px transition-colors ${
+                      dragging === edge
+                        ? "bg-sonic-500 border-sonic-300"
+                        : "bg-sonic-600 border-sonic-400 group-hover:bg-sonic-500 group-focus-visible:ring-2 group-focus-visible:ring-sonic-300"
+                    }`}
+                  >
+                    <span className="w-px h-3 bg-sonic-100/80" />
+                    <span className="w-px h-3 bg-sonic-100/80" />
+                  </div>
+                  <div
+                    className={`absolute -top-6 left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded bg-gray-800 border border-sonic-500 text-[10px] font-mono text-sonic-200 whitespace-nowrap pointer-events-none ${
+                      dragging === edge ? "block" : "hidden group-focus-visible:block"
+                    }`}
+                  >
+                    {formatTimecode(value)}
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
       </div>
 
       {/* Hover tooltip (rendered outside overflow-hidden bar) */}
@@ -174,6 +238,124 @@ export default function SegmentTimeline({
     </div>
   );
 }
+
+interface SegmentTrackProps {
+  segments: Segment[];
+  totalDuration: number;
+  onToggle: (index: number) => void;
+  onHover: (info: HoverInfo | null) => void;
+  containerRef: RefObject<HTMLDivElement | null>;
+}
+
+/** Waveform + clickable segment bar. Memoized so crop drags don't re-render every segment. */
+const SegmentTrack = memo(function SegmentTrack({
+  segments,
+  totalDuration,
+  onToggle,
+  onHover,
+  containerRef,
+}: SegmentTrackProps) {
+  return (
+    <>
+      {/* Waveform visualization. Segments are absolutely positioned by time so the track stays
+          linear (and aligned with the crop handles) even with thousands of tiny segments. */}
+      <div className="relative w-full h-16 rounded-t-lg overflow-hidden border border-b-0 border-gray-700 bg-gray-900/80">
+        {segments.map((seg, i) => {
+          const leftPercent = (seg.start / totalDuration) * 100;
+          const widthPercent = (seg.duration / totalDuration) * 100;
+          const barCount = widthPercent < 0.2 ? 1 : Math.max(2, Math.round(widthPercent * 0.8));
+          const isSpeech = seg.segmentType === "speech";
+          const opacity = seg.keep ? 1 : 0.25;
+
+          return (
+            <div
+              key={`wf-${i}`}
+              className="absolute inset-y-0 flex items-end gap-px overflow-hidden cursor-pointer"
+              style={{ left: `${leftPercent}%`, width: `${widthPercent}%`, minWidth: "1px", opacity }}
+              onClick={() => onToggle(i)}
+              onMouseEnter={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const cRect = containerRef.current?.getBoundingClientRect();
+                if (cRect) {
+                  onHover({
+                    index: i,
+                    left: rect.left - cRect.left + rect.width / 2,
+                    top: rect.top - cRect.top,
+                  });
+                }
+              }}
+              onMouseLeave={() => onHover(null)}
+            >
+              {Array.from({ length: barCount }, (_, j) => {
+                const seed = (i * 127 + j * 31) % 100;
+                const baseHeight = isSpeech ? 30 + seed * 0.6 : 5 + seed * 0.12;
+                const height = Math.min(95, Math.max(4, baseHeight));
+                const color = isSpeech
+                  ? seg.keep ? "bg-emerald-500" : "bg-red-500"
+                  : seg.keep ? "bg-emerald-800" : "bg-red-900";
+
+                return (
+                  <div
+                    key={j}
+                    className={`flex-1 min-w-[1px] rounded-t-sm ${color} transition-all duration-200`}
+                    style={{ height: `${height}%` }}
+                  />
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Timeline bar */}
+      <div className="relative w-full h-10 rounded-b-lg overflow-hidden border border-t-0 border-gray-700 bg-gray-900">
+        {segments.map((seg, i) => {
+          const leftPercent = (seg.start / totalDuration) * 100;
+          const widthPercent = (seg.duration / totalDuration) * 100;
+          const isSpeech = seg.segmentType === "speech";
+
+          let bgColor: string;
+          if (seg.keep) {
+            bgColor = isSpeech
+              ? "bg-emerald-600 hover:bg-emerald-500"
+              : "bg-emerald-800 hover:bg-emerald-700";
+          } else {
+            bgColor = isSpeech
+              ? "bg-red-800 hover:bg-red-700"
+              : "bg-red-900/60 hover:bg-red-800/60";
+          }
+
+          return (
+            <button
+              key={i}
+              onClick={() => onToggle(i)}
+              onMouseEnter={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const cRect = containerRef.current?.getBoundingClientRect();
+                if (cRect) {
+                  onHover({
+                    index: i,
+                    left: rect.left - cRect.left + rect.width / 2,
+                    top: rect.top - cRect.top,
+                  });
+                }
+              }}
+              onMouseLeave={() => onHover(null)}
+              className={`absolute inset-y-0 cursor-pointer ${
+                widthPercent > 0.5 ? "border-r border-gray-800 last:border-r-0" : ""
+              } transition-all duration-200 hover:brightness-110 hover:shadow-[0_0_12px_rgba(255,255,255,0.1)] hover:z-10 ${bgColor}`}
+              style={{
+                left: `${leftPercent}%`,
+                width: `${widthPercent}%`,
+                minWidth: widthPercent > 0.5 ? "2px" : "1px",
+              }}
+            />
+          );
+        })}
+      </div>
+    </>
+  );
+});
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);

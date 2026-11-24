@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { AudioFile, JobState, LogEntry, Segment } from "@/types";
+import type { AudioFile, JobState, LogEntry, Segment, TimeRange } from "@/types";
 
 function createEmptyJob(): JobState {
   return {
@@ -28,12 +28,15 @@ interface JobStore {
   audioFile: AudioFile | null;
   job: JobState;
   segments: Segment[];
+  /** Portion of the file to export; `null` means the whole file. */
+  cropRange: TimeRange | null;
 
   setAudioFile: (file: AudioFile) => void;
   startAnalysis: () => void;
   updateProgress: (progress: number, phase?: string) => void;
   setSegments: (segments: Segment[]) => void;
   toggleSegmentKeep: (index: number) => void;
+  setCropRange: (range: TimeRange | null) => void;
   startExport: () => void;
   setComplete: (outputPath: string) => void;
   setError: (error: string) => void;
@@ -45,12 +48,14 @@ export const useJobStore = create<JobStore>((set) => ({
   audioFile: null,
   job: createEmptyJob(),
   segments: [],
+  cropRange: null,
 
   setAudioFile: (file) =>
     set({
       audioFile: file,
       job: { ...createEmptyJob(), status: "idle" },
       segments: [],
+      cropRange: null,
     }),
 
   startAnalysis: () =>
@@ -68,6 +73,7 @@ export const useJobStore = create<JobStore>((set) => ({
         ],
       },
       segments: [],
+      cropRange: null,
     })),
 
   updateProgress: (progress, phase) =>
@@ -100,6 +106,8 @@ export const useJobStore = create<JobStore>((set) => ({
         i === index ? { ...seg, keep: !seg.keep } : seg,
       ),
     })),
+
+  setCropRange: (range) => set({ cropRange: range }),
 
   startExport: () =>
     set((state) => ({
@@ -157,5 +165,6 @@ export const useJobStore = create<JobStore>((set) => ({
       audioFile: null,
       job: createEmptyJob(),
       segments: [],
+      cropRange: null,
     }),
 }));

@@ -16,6 +16,12 @@ export interface Segment {
   keep: boolean;
 }
 
+/** A time window in seconds, from `start` (inclusive) to `end` (exclusive). */
+export interface TimeRange {
+  start: number;
+  end: number;
+}
+
 export interface ProcessingSettings {
   silenceThresholdDb: number;
   minSilenceDuration: number;

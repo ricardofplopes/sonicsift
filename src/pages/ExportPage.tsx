@@ -1,19 +1,26 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useJobStore } from "@/stores/jobStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useSidecar } from "@/hooks/useSidecar";
 import { save } from "@tauri-apps/plugin-dialog";
 import ProgressBar from "@/components/ProgressBar";
+import { buildExportRanges, formatTimecode } from "@/lib/timeRange";
 
 export default function ExportPage() {
   const navigate = useNavigate();
-  const { audioFile, job, segments, startExport, reset } = useJobStore();
+  const { audioFile, job, segments, cropRange, startExport, reset } = useJobStore();
   const { settings } = useSettingsStore();
   const { sendCommand } = useSidecar();
   const [outputPath, setOutputPath] = useState<string>(
     job.outputPath || "",
   );
+
+  const exportRanges = useMemo(
+    () => buildExportRanges(segments, cropRange),
+    [segments, cropRange],
+  );
+  const hasAudioToExport = exportRanges.length > 0;
 
   const handleChooseOutput = async () => {
     // Default to input filename with new extension
@@ -37,7 +44,7 @@ export default function ExportPage() {
   };
 
   const handleExport = async () => {
-    if (!audioFile) return;
+    if (!audioFile || !hasAudioToExport) return;
 
     startExport();
 
@@ -50,15 +57,11 @@ export default function ExportPage() {
       if (!finalOutputPath.includes('.')) finalOutputPath += `.${fmt}`;
     }
 
-    const keptSegments = segments
-      .filter((s) => s.keep)
-      .map((s) => ({ start: s.start, end: s.end }));
-
     try {
       await sendCommand("export", {
         inputPath: audioFile.path,
         outputPath: finalOutputPath,
-        segments: keptSegments,
+        segments: exportRanges,
         format: fmt,
         enhancementStrength: settings.enhancementStrength,
       });
@@ -104,6 +107,33 @@ export default function ExportPage() {
         </div>
       </div>
 
+      {/* Crop summary */}
+      {cropRange && (
+        <div className="card w-full max-w-lg py-4">
+          <p className="text-sm text-gray-400">
+            Crop range{" "}
+            <span className="font-mono text-sonic-300">
+              {formatTimecode(cropRange.start)} → {formatTimecode(cropRange.end)}
+            </span>{" "}
+            <span className="text-gray-500">
+              ({formatTimecode(cropRange.end - cropRange.start)})
+            </span>
+          </p>
+        </div>
+      )}
+
+      {/* Nothing to export */}
+      {!hasAudioToExport && !isExporting && !isComplete && (
+        <div className="card w-full max-w-lg py-4 border-amber-700 bg-amber-900/20">
+          <p className="text-amber-300 text-sm">
+            {cropRange
+              ? "No kept audio inside the crop range."
+              : "No segments are marked to keep."}{" "}
+            Go back to Review to adjust.
+          </p>
+        </div>
+      )}
+
       {/* Progress during export */}
       {isExporting && (
         <div className="w-full max-w-lg">
@@ -144,7 +174,7 @@ export default function ExportPage() {
         {!isComplete && !isExporting && (
           <button
             onClick={handleExport}
-            disabled={!outputPath || isExporting}
+            disabled={!outputPath || isExporting || !hasAudioToExport}
             className="btn-primary px-8 py-3 text-lg"
           >
             <svg className="w-5 h-5 inline-block mr-1 -mt-0.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

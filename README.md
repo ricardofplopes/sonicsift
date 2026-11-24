@@ -28,7 +28,7 @@ SonicSift processes very large audio recordings (up to 12 hours) locally on your
 
 1. **Import** a large audio file
 2. **Analyze** to detect silence/noise vs. speech segments
-3. **Review** detected segments and toggle what to keep
+3. **Review** detected segments, toggle what to keep, and optionally crop to a time range (e.g. minute 30 → minute 100)
 4. **Enhance** kept segments (normalization, noise filtering)
 5. **Export** a cleaned, trimmed final file
 
@@ -137,6 +137,12 @@ Send JSON commands via stdin:
 {"type": "ping", "payload": {}}
 ```
 
+### Run frontend tests
+
+```bash
+pnpm test
+```
+
 ### Run Python tests
 
 ```bash
@@ -152,6 +158,7 @@ sonicsift/
 │   ├── components/         # Reusable UI components
 │   ├── pages/              # App pages (Import, Settings, Progress, Review, Export)
 │   ├── hooks/              # Custom React hooks
+│   ├── lib/                # Pure helpers (time ranges, crop logic) + Vitest tests
 │   ├── stores/             # Zustand state stores
 │   └── types/              # TypeScript type definitions
 ├── src-tauri/              # Tauri Rust backend
